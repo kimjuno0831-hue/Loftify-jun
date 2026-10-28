@@ -24,6 +24,7 @@ import 'general_setting_screen.dart';
 import 'image_setting_screen.dart';
 import 'lofter_basic_setting_screen.dart';
 import 'base_setting_screen.dart';
+import '../../ko/ko_settings_page.dart';
 
 class MobileSettingNavigationScreen extends BaseSettingScreen {
   const MobileSettingNavigationScreen({
@@ -56,6 +57,14 @@ class _MobileSettingNavigationScreenState
           context: context,
           title: appLocalizations.setting,
           children: [
+            EntryItem(
+              title: '한국어 번역',
+              leading: Icons.translate,
+              showLeading: true,
+              onTap: () {
+                RouteUtil.pushCupertinoRoute(context, const KoSettingsPage());
+              },
+            ),
             EntryItem(
               title: appLocalizations.generalSetting,
               leading: LoftifyIcons.generalSettings,

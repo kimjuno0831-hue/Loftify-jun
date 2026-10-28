@@ -16,6 +16,7 @@ import 'package:loftify/Utils/cloud_control_provider.dart';
 import 'package:loftify/Utils/display_mode_util.dart';
 import 'package:loftify/Utils/download_task_manager.dart';
 import 'package:loftify/Utils/hive_util.dart';
+import 'package:loftify/ko/ko_compat.dart';
 import 'package:loftify/Utils/loftify_file_util.dart';
 import 'package:loftify/Utils/lottie_files.dart';
 import 'package:loftify/Utils/request_header_util.dart';
@@ -90,6 +91,7 @@ Future<void> initApp() async {
   await DatabaseManager.getDataBase();
   // Hive.defaultDirectory = await FileUtil.getApplicationDir();
   await HiveUtil.initBox();
+  await GStorage.init(await FileUtil.getApplicationDir()); // 한국어 번역 설정
   await ResponsiveUtil.init();
   LoftifyFileUtil.configureDownloadDelegates();
   await DownloadTaskManager.instance.initialize();

@@ -47,6 +47,7 @@ import '../../Widgets/PostItem/recommend_flow_item_builder.dart';
 import '../../Widgets/PostDetail/detail_bottom_bar.dart';
 import '../../Widgets/PostDetail/post_content_sliver.dart';
 import '../../Widgets/PostDetail/post_content_section.dart';
+import '../../ko/ko_post_body.dart';
 import '../../Widgets/PostDetail/post_download_action_icon.dart';
 import '../../Widgets/PostDetail/post_swipe_gesture_detector.dart';
 import '../../Widgets/loftify_icons.dart';
@@ -2393,12 +2394,20 @@ class _PostDetailScreenState extends BaseDynamicState<PostDetailScreen>
   }
 
   Widget _buildPostContent() {
-    return PostContentSection(
-      title: _postDetailData!.post!.title,
-      content: _postDetailData!.post!.content,
-      url: _postDetailData!.post!.permalink,
-      style: context.design.typography.readingBody,
-      onDownloadSuccess: _handleDownloadSuccessAction,
+    final post = _postDetailData!.post!;
+    // 한국어 번역: 번역 버튼 줄 + 번역본으로 바꾼 제목·본문
+    return KoPostBody(
+      postId: post.id,
+      title: post.title,
+      content: post.content,
+      tags: post.tagList,
+      builder: (title, content) => PostContentSection(
+        title: title,
+        content: content,
+        url: post.permalink,
+        style: context.design.typography.readingBody,
+        onDownloadSuccess: _handleDownloadSuccessAction,
+      ),
     );
   }
 

@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:loftify/ko/ko_compat.dart';
 import 'package:loftify/ko/ko_engines.dart';
 import 'package:loftify/ko/ko_translate.dart';
+import 'package:loftify/ko/ko_voice.dart';
 
 // 본문을 문단(줄)으로 나눈 결과
 class KoDoc {
@@ -241,6 +242,7 @@ abstract final class KoChapter {
     List<String> lines, {
     bool? useAi,
     bool fresh = false,
+    String? story, // 인물 말투 범위 (KoVoice.storyScope)
     void Function(int done, int total)? onProgress,
   }) async {
     final map = fresh ? <String, String>{} : savedMap(postId);
@@ -270,7 +272,7 @@ abstract final class KoChapter {
       if (ai) {
         try {
           final (r, slot) = await KoEngines.rotate(
-            (s) => _ai(s, c, prevSrc, prevKo),
+            (s) => _ai(s, c, prevSrc, prevKo, story: story),
           );
           out = r;
           by = slot.label;
@@ -333,22 +335,38 @@ abstract final class KoChapter {
     KoSlot slot,
     List<String> xs,
     List<String> prevSrc,
-    List<String> prevKo,
-  ) async {
+    List<String> prevKo, {
+    String? story,
+  }) async {
     final joined = xs.join('\n');
     final used = KoTr.glossary.where((e) => joined.contains(e.key)).toList();
+    // 인물 말투: 작품 기본 + 이 연재. 앞 내용에 나온 인물도 같이 고려
+    final voice = story == null
+        ? ''
+        : KoVoice.promptFor(KoVoice.merged(story), '$joined\n${prevSrc.join('\n')}');
+    final record = story != null && KoVoice.autoOn;
     final system = StringBuffer()
       ..write('너는 중국어 소설·팬픽(LOFTER)을 한국어로 옮기는 전문 번역가다. ')
       ..write(_stylePrompt(KoTr.style))
       ..write(
-        '대사는 인물 관계와 성격에 맞는 한국어 말투(존댓말/반말)로 일관되게 옮겨라. '
+        '대사는 누가 누구에게 하는 말인지 앞뒤 문맥으로 판단해서, 그 관계에 맞는 한국어 말투(존댓말/반말, 호칭)로 일관되게 옮겨라. '
         '인명·지명·고유명사는 용어집이 있으면 반드시 그대로 쓰고, 없으면 한국에서 통용되는 표기(없으면 한자음)로 옮겨라. '
         '중국 인터넷 은어·밈은 직역하지 말고 뜻이 바로 통하게 풀어라. '
         '작가의 말·후기·공지 같은 문장도 그대로 번역하라. '
         '모든 항목을 반드시 한국어로 번역하라. 중국어를 그대로 남기지 마라. '
-        '입력은 JSON 문자열 배열이고, 각 항목은 소설의 한 문단(또는 한 줄)이다. '
-        '입력과 같은 길이·같은 순서의 JSON 문자열 배열 하나로만 답하라. 항목을 합치거나 나누거나 빼지 마라. 설명은 쓰지 마라.',
+        '입력은 JSON 문자열 배열이고, 각 항목은 소설의 한 문단(또는 한 줄)이다. ',
       );
+    if (record) {
+      system.write(
+        'JSON 객체 하나로만 답하라: {"t": [번역 배열], "v": [말투 기록], "c": [인물 기록]}. '
+        't 는 입력과 같은 길이·같은 순서의 번역 문자열 배열이다. 항목을 합치거나 나누거나 빼지 마라. '
+        'v 에는 이번 부분에서 네가 정해서 쓴 말투를 {"from": 말하는 사람 한국어 이름, "to": 듣는 사람 한국어 이름, "rule": "반말, \'박사\'라고 부름" 처럼 짧게} 로 적어라. '
+        '아래 [인물 말투]에 이미 있는 것과 같으면 빼고, 확실한 것만 최대 5개. 없으면 빈 배열. '
+        'c 에는 처음 나온 주요 인물을 {"zh": 중국어 이름, "ko": 한국어 이름, "note": "말투·성격 짧게"} 로, 최대 3개. 없으면 빈 배열. 설명은 쓰지 마라.',
+      );
+    } else {
+      system.write('입력과 같은 길이·같은 순서의 JSON 문자열 배열 하나로만 답하라. 항목을 합치거나 나누거나 빼지 마라. 설명은 쓰지 마라.');
+    }
     final names = KoTr.activeWorks.map((e) => e.name).toList();
     if (names.isNotEmpty) system.write('\n\n[작품] ${names.join(', ')}');
     if (used.isNotEmpty) {
@@ -357,6 +375,7 @@ abstract final class KoChapter {
         system.write('${e.key} → ${e.value}\n');
       }
     }
+    system.write(voice);
     if (prevSrc.isNotEmpty && prevKo.every((e) => e.isNotEmpty)) {
       system.write('\n\n[바로 앞 내용 - 참고만 하고 번역하지 마라]\n');
       for (var i = 0; i < prevSrc.length; i++) {
@@ -364,19 +383,37 @@ abstract final class KoChapter {
       }
     }
     final text = await KoEngines.ask(slot, system.toString(), jsonEncode(xs), json: true);
-    final a = text.indexOf('[');
-    final b = text.lastIndexOf(']');
-    if (a < 0 || b <= a) throw const FormatException('형식');
-    final arr = jsonDecode(text.substring(a, b + 1)) as List;
+    List? arr;
+    // 객체 {"t": [...], "v": [...], "c": [...]} 로 왔으면
+    final oa = text.indexOf('{');
+    final ob = text.lastIndexOf('}');
+    if (oa >= 0 && ob > oa) {
+      try {
+        final o = jsonDecode(text.substring(oa, ob + 1));
+        if (o is Map && o['t'] is List) {
+          arr = o['t'] as List;
+          if (record && arr.length == xs.length) {
+            KoVoice.record(story!, o['v'] is List ? o['v'] as List : const [], o['c'] is List ? o['c'] as List : const []);
+          }
+        }
+      } catch (_) {}
+    }
+    if (arr == null) {
+      // 배열만 왔으면 (지시를 안 따랐거나 기록 끔)
+      final a = text.indexOf('[');
+      final b = text.lastIndexOf(']');
+      if (a < 0 || b <= a) throw const FormatException('형식');
+      arr = jsonDecode(text.substring(a, b + 1)) as List;
+    }
     if (arr.length != xs.length) {
       if (xs.length <= 2) throw const FormatException('줄 수 안 맞음');
       final mid = xs.length ~/ 2;
       return [
-        ...await _ai(slot, xs.sublist(0, mid), prevSrc, prevKo),
-        ...await _ai(slot, xs.sublist(mid), prevSrc, prevKo),
+        ...await _ai(slot, xs.sublist(0, mid), prevSrc, prevKo, story: story),
+        ...await _ai(slot, xs.sublist(mid), prevSrc, prevKo, story: story),
       ];
     }
-    final res = [for (final o in arr) o?.toString()];
+    final res = [for (final o in arr) o is String ? o : o?.toString()];
     var bad = 0;
     for (var i = 0; i < xs.length; i++) {
       if (!KoTr.validResult(xs[i], res[i])) bad++;

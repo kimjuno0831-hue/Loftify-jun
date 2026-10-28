@@ -7,6 +7,8 @@ import 'package:loftify/ko/ko_compat.dart';
 import 'package:loftify/ko/ko_fix.dart';
 import 'package:loftify/ko/ko_settings_page.dart';
 import 'package:loftify/ko/ko_translate.dart';
+import 'package:loftify/ko/ko_voice.dart';
+import 'package:loftify/ko/ko_voice_page.dart';
 
 class KoPostBody extends StatefulWidget {
   const KoPostBody({
@@ -15,6 +17,8 @@ class KoPostBody extends StatefulWidget {
     required this.title,
     required this.content,
     this.tags = const [],
+    this.collectionId,
+    this.collectionTitle,
     required this.builder,
   });
 
@@ -22,6 +26,9 @@ class KoPostBody extends StatefulWidget {
   final String title;
   final String content;
   final List<String> tags;
+  final int? collectionId; // 합집(연재) 번호: 인물 말투를 연재 단위로 기억
+  final String? collectionTitle;
+  String get story => KoVoice.storyScope(postId, collectionId);
   // blockBuilder: 번역된 문단을 직접 그려서 누르면 고칠 수 있게 (본문 위젯에 넘겨줌)
   final Widget Function(
     String title,
@@ -103,7 +110,7 @@ class _KoPostBodyState extends State<KoPostBody> {
           _map.remove(l);
         }
       });
-      await KoChapter.translate(widget.postId, _lines);
+      await KoChapter.translate(widget.postId, _lines, story: widget.story);
       if (!mounted) return;
       setState(() {
         _map = KoChapter.savedMap(widget.postId);
@@ -116,7 +123,11 @@ class _KoPostBodyState extends State<KoPostBody> {
     }
   }
 
+  String get _storyTitle =>
+      (widget.collectionId ?? 0) > 0 ? (widget.collectionTitle ?? '') : widget.title;
+
   void _prepare() {
+    KoVoice.rememberTitle(widget.story, _storyTitle);
     // 작품별 용어집 자동 적용: 제목·태그로 판단
     // (화면을 그리는 중에 다른 위젯을 바꾸지 않게 다음 순간에)
     final key = 'post:${widget.postId}';
@@ -157,6 +168,7 @@ class _KoPostBodyState extends State<KoPostBody> {
         _lines,
         useAi: useAi,
         fresh: fresh,
+        story: widget.story,
         onProgress: (d, t) {
           if (mounted) {
             setState(() {
@@ -187,7 +199,7 @@ class _KoPostBodyState extends State<KoPostBody> {
   Future<void> _retranslateLine(String line) async {
     KoChapter.removeLine(widget.postId, line);
     _map.remove(line);
-    final r = await KoChapter.translate(widget.postId, [line]);
+    final r = await KoChapter.translate(widget.postId, [line], story: widget.story);
     if (mounted) setState(() => _map = KoChapter.savedMap(widget.postId)..addAll(r.map));
   }
 
@@ -197,6 +209,7 @@ class _KoPostBodyState extends State<KoPostBody> {
         lines: _lines.where(KoTr.hasCjk).toSet().toList(),
         tr: _tr,
         retranslate: _retranslateLine,
+        story: widget.story,
       ),
     );
     if (!mounted) return;
@@ -262,6 +275,7 @@ class _KoPostBodyState extends State<KoPostBody> {
       zh,
       ko: ko == zh ? null : ko,
       retranslate: () => _retranslateLine(zh),
+      voiceStory: widget.story,
     );
     if (mounted) setState(() {});
   }
@@ -279,6 +293,8 @@ class _KoPostBodyState extends State<KoPostBody> {
           _showKo = false;
           _by = '';
         });
+      case 'voice':
+        KoNav.to(() => KoVoiceEditPage(scope: widget.story, title: _storyTitle));
       case 'settings':
         KoNav.to(() => const KoSettingsPage()).then((_) {
           if (mounted) setState(_prepare);
@@ -359,6 +375,7 @@ class _KoPostBodyState extends State<KoPostBody> {
                 itemBuilder: (_) => [
                   if (KoTr.hasAi) const PopupMenuItem(value: 'ai', child: Text('AI 번역기로 처음부터 다시')),
                   const PopupMenuItem(value: 'google', child: Text('구글 번역으로 처음부터 다시')),
+                  const PopupMenuItem(value: 'voice', child: Text('인물 말투 (이 연재)')),
                   if (translated) const PopupMenuItem(value: 'forget', child: Text('저장된 번역 지우기')),
                   const PopupMenuItem(value: 'settings', child: Text('번역 설정')),
                 ],
@@ -388,8 +405,14 @@ class _KoPostBodyState extends State<KoPostBody> {
 
 // 문단별 원문·번역 목록. 누르면 번역 고치기 창
 class _KoParagraphsPage extends StatefulWidget {
-  const _KoParagraphsPage({required this.lines, required this.tr, required this.retranslate});
+  const _KoParagraphsPage({
+    required this.lines,
+    required this.tr,
+    required this.retranslate,
+    required this.story,
+  });
 
+  final String story;
   final List<String> lines;
   final String Function(String) tr;
   final Future<void> Function(String) retranslate;
@@ -430,6 +453,7 @@ class _KoParagraphsPageState extends State<_KoParagraphsPage> {
                 zh,
                 ko: ko == zh ? null : ko,
                 retranslate: () => widget.retranslate(zh),
+                voiceStory: widget.story,
               );
               if (mounted) setState(() {});
             },

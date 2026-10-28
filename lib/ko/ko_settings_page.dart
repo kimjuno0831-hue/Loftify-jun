@@ -6,6 +6,7 @@ import 'package:loftify/ko/ko_engines.dart';
 import 'package:loftify/ko/ko_engines_page.dart';
 import 'package:loftify/ko/ko_translate.dart';
 import 'package:loftify/ko/ko_works.dart';
+import 'package:loftify/ko/ko_voice_page.dart';
 
 class KoSettingsPage extends StatefulWidget {
   const KoSettingsPage({super.key});
@@ -264,6 +265,15 @@ class _KoSettingsPageState extends State<KoSettingsPage> {
             onTap: () async {
               await checkGlossary(context, null);
               if (mounted) setState(() {});
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.record_voice_over),
+            title: const Text('인물 말투'),
+            subtitle: const Text('누가 누구에게 어떤 말투를 쓰는지 (작품 기본 · 연재별, AI 번역기)'),
+            onTap: () async {
+              await KoNav.to(() => const KoVoiceListPage());
+              setState(() {});
             },
           ),
           ListTile(

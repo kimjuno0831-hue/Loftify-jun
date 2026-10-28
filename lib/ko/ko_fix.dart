@@ -5,6 +5,7 @@
 import 'package:loftify/ko/ko_lookup.dart';
 import 'package:loftify/ko/ko_translate.dart';
 import 'package:loftify/ko/ko_compat.dart';
+import 'package:loftify/ko/ko_voice.dart';
 import 'package:flutter/material.dart';
 
 abstract final class KoFix {
@@ -16,11 +17,18 @@ abstract final class KoFix {
     Object? origId,
     String? ko,
     Future<void> Function()? retranslate,
+    String? voiceStory,
   }) async {
     if (zh.trim().isEmpty) return;
     if (ko == null) KoTr.want(zh);
     await KoNav.to(
-      () => KoFixPage(zh: zh, origId: origId, ko: ko, retranslate: retranslate),
+      () => KoFixPage(
+        zh: zh,
+        origId: origId,
+        ko: ko,
+        retranslate: retranslate,
+        voiceStory: voiceStory,
+      ),
     );
   }
 }
@@ -32,8 +40,11 @@ class KoFixPage extends StatefulWidget {
     this.origId,
     this.ko,
     this.retranslate,
+    this.voiceStory,
   });
 
+  // 본문 문단에서 열었을 때: 인물 말투 규칙을 저장할 연재 범위
+  final String? voiceStory;
   final String zh;
   final Object? origId;
   final String? ko;
@@ -88,6 +99,9 @@ class _KoFixPageState extends State<KoFixPage> {
     _sentenceCtrl.dispose();
     _termZh.dispose();
     _termKo.dispose();
+    _vFrom.dispose();
+    _vTo.dispose();
+    _vRule.dispose();
     super.dispose();
   }
 
@@ -225,6 +239,82 @@ class _KoFixPageState extends State<KoFixPage> {
     KoNav.back();
   }
 
+  // ── 말투 규칙 ──
+  final _vFrom = TextEditingController();
+  final _vTo = TextEditingController();
+  final _vRule = TextEditingController();
+  String? _vScope; // null 이면 이 연재
+
+  Widget _voiceForm(Widget Function(String, VoidCallback?) btn) {
+    final story = widget.voiceStory!;
+    final names = KoVoice.names(story);
+    final works = KoTr.activeWorks;
+    Widget pick(TextEditingController c) => names.isEmpty
+        ? const SizedBox.shrink()
+        : Wrap(
+            spacing: 6,
+            children: [
+              for (final n in names.take(12))
+                ActionChip(
+                  label: Text(n),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() => c.text = n),
+                ),
+            ],
+          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(controller: _vFrom, decoration: const InputDecoration(labelText: '말하는 사람 (한국어 이름)')),
+        pick(_vFrom),
+        TextField(
+          controller: _vTo,
+          decoration: const InputDecoration(labelText: "듣는 사람 (누구에게나면 '*')"),
+        ),
+        pick(_vTo),
+        TextField(
+          controller: _vRule,
+          decoration: const InputDecoration(labelText: '말투', hintText: "예) 반말, '박사'라고 부름 / 하십시오체"),
+        ),
+        const SizedBox(height: 8),
+        DropdownButton<String?>(
+          value: _vScope,
+          isExpanded: true,
+          items: [
+            const DropdownMenuItem(value: null, child: Text('이 연재에만')),
+            for (final w in works)
+              DropdownMenuItem(value: KoVoice.workScope(w.name), child: Text('작품 기본: ${w.name}')),
+          ],
+          onChanged: (v) => setState(() => _vScope = v),
+        ),
+        Wrap(
+          children: [
+            btn('규칙 저장', () => _saveVoice(retranslate: false)),
+            if (widget.retranslate != null) btn('저장하고 이 문단 다시 번역', () => _saveVoice(retranslate: true)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _saveVoice({required bool retranslate}) {
+    final f = _vFrom.text.trim();
+    final t = _vTo.text.trim();
+    final r = _vRule.text.trim();
+    if (f.isEmpty || t.isEmpty || r.isEmpty) {
+      KoDialog.showToast('말하는 사람, 듣는 사람, 말투를 모두 적어 주세요');
+      return;
+    }
+    KoVoice.putRule(_vScope ?? widget.voiceStory!, f, t, r);
+    if (!retranslate) {
+      KoDialog.showToast("저장했어요. 이미 번역한 문단은 ⋮ → 처음부터 다시 번역하면 반영돼요");
+      return;
+    }
+    KoTr.setOverride(widget.zh, null, rewant: false);
+    _setInfo('규칙을 저장하고 이 문단을 다시 번역하는 중…');
+    widget.retranslate!().then((_) => KoNav.back());
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = ColorScheme.of(context);
@@ -319,8 +409,15 @@ class _KoFixPageState extends State<KoFixPage> {
                   }),
               ],
             ),
+            if (widget.voiceStory != null) ...[
+              const Divider(height: 32),
+              Text('방법 2. 말투를 규칙으로 저장', style: label.copyWith(fontSize: 15)),
+              const Text('누가 누구에게 어떤 말투를 쓰는지 저장하면, 앞으로 번역할 때 계속 그렇게 해요 (AI 번역기).'),
+              gap(8),
+              _voiceForm(btn),
+            ],
             const Divider(height: 32),
-            Text('방법 2. 단어를 용어집에 넣기', style: label.copyWith(fontSize: 15)),
+            Text('방법 ${widget.voiceStory != null ? 3 : 2}. 단어를 용어집에 넣기', style: label.copyWith(fontSize: 15)),
             const Text('그 단어가 들어간 다른 번역에도 모두 적용돼요.'),
             gap(8),
             btn('① 번역에서 고른 단어의 원문 찾기', _findSource),

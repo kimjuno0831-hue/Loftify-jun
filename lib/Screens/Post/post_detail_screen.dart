@@ -2401,6 +2401,8 @@ class _PostDetailScreenState extends BaseDynamicState<PostDetailScreen>
       title: post.title,
       content: post.content,
       tags: post.tagList,
+      collectionId: post.postCollection?.id,
+      collectionTitle: post.postCollection?.name,
       builder: (title, content, blockBuilder) => PostContentSection(
         title: title,
         content: content,

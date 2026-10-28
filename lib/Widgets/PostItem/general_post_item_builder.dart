@@ -24,6 +24,7 @@ import '../Design/loftify_surfaces.dart';
 import '../loftify_icons.dart';
 import '../loftify_reaction_icon.dart';
 import 'image_grid.dart';
+import '../../ko/ko_widgets.dart';
 
 export 'package:loftify/Widgets/PostItem/general_post_item.dart';
 
@@ -220,7 +221,7 @@ class WaterfallFlowPostItemWidgetState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (StringUtil.isNotEmpty(item.title))
-                  Text(
+                  KoText(
                     item.title,
                     style: design.typography.cardTitle,
                     maxLines: 3,
@@ -230,7 +231,7 @@ class WaterfallFlowPostItemWidgetState
                     StringUtil.isNotEmpty(item.digest))
                   SizedBox(height: design.spacing.lg),
                 if (StringUtil.isNotEmpty(item.digest))
-                  Text(
+                  KoText(
                     HtmlUtil.extractTextFromHtml(item.digest),
                     maxLines: 6,
                     overflow: TextOverflow.ellipsis,
@@ -420,7 +421,7 @@ class WaterfallFlowPostItemWidgetState
                             margin: EdgeInsets.only(
                               bottom: design.spacing.xxs,
                             ),
-                            child: Text(
+                            child: KoText(
                               shownTitle,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -729,7 +730,7 @@ class GridPostItemWidgetState extends State<GridPostItemWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (item.title.isNotEmpty)
-              Text(
+              KoText(
                 "${item.title}\n",
                 style: Theme.of(context).textTheme.titleSmall?.apply(
                       fontWeightDelta: 2,
@@ -740,7 +741,7 @@ class GridPostItemWidgetState extends State<GridPostItemWidget> {
               ),
             SizedBox(height: item.title.isNotEmpty ? 5 : 5),
             Expanded(
-              child: Text(
+              child: KoText(
                 StringUtil.clearBlank(
                     HtmlUtil.extractTextFromHtml(item.digest)),
                 maxLines: item.title.isNotEmpty ? 6 : 8,

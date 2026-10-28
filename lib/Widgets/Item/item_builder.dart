@@ -7,6 +7,7 @@ import '../../Utils/app_provider.dart';
 import '../../Utils/enums.dart';
 import '../../Utils/utils.dart';
 import '../loftify_icons.dart';
+import '../../ko/ko_widgets.dart';
 
 enum TailingType { none, clear, password, icon, text, widget }
 
@@ -503,7 +504,7 @@ class ItemBuilder {
                     color: ChewieColors.getHotTagTextColor(context),
                   ),
                 ),
-              Text(
+              KoText(
                 ((tagType == TagType.normal || !showIcon) && showTagLabel)
                     ? "#$str"
                     : str,
@@ -550,7 +551,7 @@ class ItemBuilder {
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(50),
         ),
-        child: Text(
+        child: KoText(
           "#$tag",
           style: Theme.of(context).textTheme.labelSmall,
         ),

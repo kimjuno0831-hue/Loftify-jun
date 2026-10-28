@@ -24,6 +24,7 @@ import '../../Widgets/Item/item_builder.dart';
 import '../../Widgets/Item/loftify_item_builder.dart';
 import '../../Widgets/loftify_icons.dart';
 import '../../l10n/l10n.dart';
+import '../../ko/ko_translate.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.showBack = false});
@@ -243,8 +244,18 @@ class SearchScreenState extends BaseDynamicState<SearchScreen>
     bool processed = await UriUtil.processUrl(context, str, quiet: true);
     if (!mounted) return;
     if (!processed) {
+      // 한국어로 검색: 한국어가 있으면 중국어로 바꿔서 (용어집 먼저)
+      var key = str;
+      if (KoTr.searchKoOn && KoTr.hasHangul(str)) {
+        final zh = await KoTr.toChinese(str);
+        if (!mounted) return;
+        if (zh != null && zh.trim().isNotEmpty) {
+          key = zh.trim();
+          IToast.show('「$key」(으)로 검색해요');
+        }
+      }
       RouteUtil.pushPanelCupertinoRoute(
-          context, SearchResultScreen(searchKey: str));
+          context, SearchResultScreen(searchKey: key));
     }
   }
 

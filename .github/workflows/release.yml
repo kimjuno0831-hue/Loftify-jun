@@ -65,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/ko lib/main.dart lib/Screens/Post/post_detail_screen.dart lib/Screens/Setting/mobile_setting_navigation_screen.dart > analyze.txt 2>&1
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib > analyze.txt 2>&1
           code=$?
           grep -E "^\s*error " analyze.txt | head -40 | while IFS= read -r l; do echo "::error::$l"; done
           grep -E "^\s*warning " analyze.txt | head -10 | while IFS= read -r l; do echo "::warning::$l"; done

@@ -19,6 +19,7 @@ import '../../Widgets/Item/login_input_item.dart';
 import '../../Widgets/Login/loftify_login_layout.dart';
 import '../../Widgets/loftify_icons.dart';
 import '../../l10n/l10n.dart';
+import '../../ko/ko_login.dart';
 
 class LoginByCaptchaScreen extends StatefulWidget {
   const LoginByCaptchaScreen({super.key, this.initPhone});
@@ -243,6 +244,20 @@ class _LoginByCaptchaScreenState extends BaseDynamicState<LoginByCaptchaScreen>
           ),
           alternativeTitle: appLocalizations.otherLoginMethods,
           alternativeMethods: [
+            LoftifyLoginMethod(
+              label: '웹으로 로그인',
+              icon: Icons.public,
+              onPressed: () {
+                RouteUtil.pushCupertinoRoute(context, const KoWebLoginScreen());
+              },
+            ),
+            LoftifyLoginMethod(
+              label: '토큰 직접 넣기',
+              icon: Icons.key,
+              onPressed: () {
+                RouteUtil.pushCupertinoRoute(context, const KoTokenLoginScreen());
+              },
+            ),
             LoftifyLoginMethod(
               label: appLocalizations.loginByPassword,
               icon: LoftifyIcons.password,

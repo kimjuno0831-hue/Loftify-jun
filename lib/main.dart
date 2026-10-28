@@ -18,6 +18,8 @@ import 'package:loftify/Utils/download_task_manager.dart';
 import 'package:loftify/Utils/hive_util.dart';
 import 'package:loftify/ko/ko_compat.dart';
 import 'package:loftify/ko/ko_presets.dart';
+import 'package:loftify/ko/ko_startup.dart';
+import 'package:hive/hive.dart';
 import 'package:loftify/Utils/loftify_file_util.dart';
 import 'package:loftify/Utils/lottie_files.dart';
 import 'package:loftify/Utils/request_header_util.dart';
@@ -45,8 +47,8 @@ Future<void> runMyApp(List<String> args) async {
   chewieProvider.loadingWidgetBuilder = LottieFiles.buildLoadingAnimation;
   if (ResponsiveUtil.isAndroid()) {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    await initDisplayMode();
-    await RequestHeaderUtil.initAndroidInfo();
+    await koStep('화면 주사율', () async => await initDisplayMode());
+    await koStep('기기 정보', () async => await RequestHeaderUtil.initAndroidInfo());
   }
   if (ResponsiveUtil.isDesktop()) {
     await initWindow();
@@ -69,7 +71,13 @@ Future<void> runMyApp(List<String> args) async {
     await HotKeyManager.instance.unregisterAll();
   }
   StatefulWidget home;
-  if (HiveUtil.shouldAutoLock()) {
+  var autoLock = false;
+  try {
+    autoLock = HiveUtil.shouldAutoLock();
+  } catch (e) {
+    koStartupErrors.add('잠금 설정: $e');
+  }
+  if (autoLock) {
     home = const PinVerifyScreen(
       isModal: true,
       jumpToMain: true,
@@ -79,7 +87,7 @@ Future<void> runMyApp(List<String> args) async {
   } else {
     home = MainScreen(key: mainScreenKey);
   }
-  runApp(MyApp(home: home));
+  runApp(MyApp(home: KoStartupGuard(child: home)));
   FlutterNativeSplash.remove();
 }
 
@@ -89,15 +97,24 @@ Future<void> initApp() async {
   imageCache.maximumSizeBytes = 1024 * 1024 * 1024 * 2;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 1024 * 1024 * 1024 * 2;
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  await DatabaseManager.getDataBase();
+  // Loftify-jun: 단계마다 오류·멈춤을 잡아서 로고 화면에서 멈추지 않게 (ko_startup.dart)
+  await koStep('데이터베이스', () async => await DatabaseManager.getDataBase());
   // Hive.defaultDirectory = await FileUtil.getApplicationDir();
-  await HiveUtil.initBox();
-  await GStorage.init(await FileUtil.getApplicationDir()); // 한국어 번역 설정
-  KoPresets.seedOnce(); // 기본 제공 작품 설정 (림버스 컴퍼니 용어집·인물 말투)
-  await ResponsiveUtil.init();
+  final appDir = await FileUtil.getApplicationDir();
+  await koStep(
+    '앱 설정 저장소',
+    HiveUtil.initBox,
+    recover: () async {
+      await Hive.deleteBoxFromDisk(HiveUtil.settingsBox, path: appDir);
+      await HiveUtil.initBox();
+    },
+  );
+  await koStep('번역 저장소', () => GStorage.init(appDir)); // 한국어 번역 설정 (깨진 상자는 안에서 비우고 다시 엶)
+  await koStep('기본 제공 말투', () async => KoPresets.seedOnce());
+  await koStep('화면 설정', ResponsiveUtil.init);
   LoftifyFileUtil.configureDownloadDelegates();
-  await DownloadTaskManager.instance.initialize();
-  await RequestUtil.init();
+  await koStep('다운로드 관리', DownloadTaskManager.instance.initialize);
+  await koStep('네트워크', RequestUtil.init);
   UriUtil.processUrl = LoftifyUriUtil.processUrl;
 }
 

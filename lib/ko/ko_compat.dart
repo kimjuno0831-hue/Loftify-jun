@@ -18,9 +18,18 @@ abstract final class GStorage {
 
   // main.dart 에서 HiveUtil.initBox() 다음에 부름
   static Future<void> init(String path) async {
-    await Hive.openBox(settingBox, path: path);
-    await Hive.openBox(chapterBox, path: path);
-    await Hive.openBox(textBox, path: path);
+    for (final name in [settingBox, chapterBox, textBox]) {
+      try {
+        await Hive.openBox(name, path: path).timeout(const Duration(seconds: 15));
+      } catch (_) {
+        // 강제 종료 등으로 깨졌으면 그 상자만 비우고 새로 엶 (설정이 깨진 경우 번역 설정만 초기화됨)
+        try {
+          if (Hive.isBoxOpen(name)) await Hive.box(name).close();
+        } catch (_) {}
+        await Hive.deleteBoxFromDisk(name, path: path);
+        await Hive.openBox(name, path: path);
+      }
+    }
   }
 }
 

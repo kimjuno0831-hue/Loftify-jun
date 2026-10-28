@@ -14,6 +14,7 @@ import '../../l10n/l10n.dart';
 import 'about_setting_screen.dart';
 import 'base_setting_screen.dart';
 import 'experiment_setting_screen.dart';
+import '../../ko/ko_settings_page.dart';
 
 class SettingScreen extends BaseSettingScreen {
   const SettingScreen({
@@ -46,6 +47,22 @@ class _SettingScreenState extends BaseDynamicState<SettingScreen>
       showBack: true,
       padding: widget.padding,
       children: [
+        CaptionItem(
+          context: context,
+          title: '한국어 번역',
+          children: [
+            EntryItem(
+              title: '번역 설정',
+              description: 'AI 번역기, 말투, 목록 번역, 용어집',
+              showLeading: true,
+              onTap: () {
+                RouteUtil.pushPanelCupertinoRoute(
+                    context, const KoSettingsPage());
+              },
+              leading: Icons.translate,
+            ),
+          ],
+        ),
         CaptionItem(
           context: context,
           title: appLocalizations.basicSetting,

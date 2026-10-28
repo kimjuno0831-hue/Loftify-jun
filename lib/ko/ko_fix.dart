@@ -217,7 +217,7 @@ class _KoFixPageState extends State<KoFixPage> {
       return;
     }
     // 이 문장을 직접 고쳐둔 게 있으면 용어집이 적용되도록 지움
-    if (KoTr.hasOverride(widget.zh)) KoTr.setOverride(widget.zh, null);
+    if (KoTr.hasOverride(widget.zh)) KoTr.setOverride(widget.zh, null, rewant: widget.ko == null);
     KoTr.addGlossary(z, k, target: _target);
     KoDialog.showToast(
       "${_target == null ? '공통' : _target!.name} 용어집에 '$z=$k' 저장, 다시 번역해요",

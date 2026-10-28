@@ -155,7 +155,14 @@ class _KoPostBodyState extends State<KoPostBody> {
         retranslate: _retranslateLine,
       ),
     );
-    if (mounted) setState(() => _map = KoChapter.savedMap(widget.postId));
+    if (!mounted) return;
+    final sv = KoChapter.saved(widget.postId);
+    setState(() {
+      _map = KoChapter.savedMap(widget.postId);
+      _glossaryChanged = sv != null &&
+          sv['g'] is int &&
+          sv['g'] != KoChapter.glossarySig(_lines.join('\n'));
+    });
   }
 
   void _menu(String v) {

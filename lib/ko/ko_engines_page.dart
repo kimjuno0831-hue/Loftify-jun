@@ -35,7 +35,7 @@ class _KoEnginesPageState extends State<KoEnginesPage> {
                       baseUrl: p.baseUrl,
                       models: p.models,
                     );
-                    final saved = await Get.to<bool>(
+                    final saved = await KoNav.to<bool>(
                       () => KoEngineEditPage(engine: e, preset: p, isNew: true),
                     );
                     if (saved == true && mounted) setState(() {});
@@ -151,7 +151,7 @@ class _KoEnginesPageState extends State<KoEnginesPage> {
                         ),
                         TextButton(
                           onPressed: () async {
-                            await Get.to<bool>(() => KoEngineEditPage(engine: list[i]));
+                            await KoNav.to<bool>(() => KoEngineEditPage(engine: list[i]));
                             if (mounted) setState(() {});
                           },
                           child: const Text('설정'),

@@ -384,7 +384,16 @@ abstract final class KoChapter {
         system.write('${prevSrc[i]}\n→ ${prevKo[i]}\n');
       }
     }
-    final text = await KoEngines.ask(slot, system.toString(), jsonEncode(xs), json: true);
+    // 용어집 단어는 보내기 전에 한국어로 바꿔 둠 (AI 가 용어집을 무시하는 일을 막음)
+    final sorted = [...used]..sort((p, q) => q.key.length.compareTo(p.key.length));
+    final sendXs = [
+      for (final x in xs)
+        sorted.fold<String>(x, (acc, e) => acc.replaceAll(e.key, e.value)),
+    ];
+    if (used.isNotEmpty) {
+      system.write('\n입력에 이미 한국어로 바뀌어 있는 이름·용어는 용어집대로 바꿔 둔 것이니 글자 하나 바꾸지 말고 그대로 써라 (조사만 자연스럽게).');
+    }
+    final text = await KoEngines.ask(slot, system.toString(), jsonEncode(sendXs), json: true);
     List? arr;
     // 객체 {"t": [...], "v": [...], "c": [...]} 로 왔으면
     final oa = text.indexOf('{');

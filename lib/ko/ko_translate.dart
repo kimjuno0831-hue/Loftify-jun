@@ -152,7 +152,9 @@ abstract final class KoTr {
   // 번역에 쓰는 용어집: 공통 + 지금 적용 중인 작품들 (긴 단어 먼저)
   static List<MapEntry<String, String>> get glossary {
     final map = <String, String>{};
-    for (final w in activeWorks) {
+    // 같은 단어가 여러 작품 용어집에 있으면 먼저 만든 작품(직접 만든 것) 쪽이 이김.
+    // 나중에 들어온 기본 제공 작품이 직접 고친 표기를 덮어쓰지 않게 거꾸로 적용
+    for (final w in activeWorks.reversed) {
       for (final e in parseGlossary(w.glossary)) {
         map[e.key] = e.value;
       }

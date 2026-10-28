@@ -44,7 +44,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.cloudchewie.loftify"
+        applicationId "com.jun.loftify"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()

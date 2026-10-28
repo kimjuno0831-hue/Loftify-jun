@@ -227,7 +227,11 @@ abstract final class KoVoice {
       '\n\n[인물 말투 - 반드시 지켜라. 그 인물의 대사는 말투 단계·어미·자칭을 그대로 쓰고 예시 대사와 같은 느낌으로 옮겨라. '
       '아래 관계 규칙이 있는 상대에게는 관계 규칙이 우선한다]\n',
     );
-    for (final c in chars.take(20)) {
+    final gl = {for (final e in KoTr.glossary) e.key: e.value};
+    for (final c0 in chars.take(20)) {
+      final c = (c0.zh.isNotEmpty && gl[c0.zh] != null && gl[c0.zh] != c0.ko)
+          ? KoChar(c0.zh, gl[c0.zh]!, c0.note, auto: c0.auto)
+          : c0;
       sb.writeln('· ${c.zh.isEmpty ? c.ko : '${c.zh}(${c.ko})'}${c.note.isEmpty ? '' : ' — ${c.note}'}');
     }
     for (final r in rels.take(30)) {
@@ -259,10 +263,11 @@ abstract final class KoVoice {
       relMap[key] = KoRel(from, to, rule, auto: true);
       changed = true;
     }
+    final gl = {for (final e in KoTr.glossary) e.key: e.value};
     for (final v in chars) {
       if (v is! Map) continue;
       final zh = (v['zh'] ?? '').toString().trim();
-      final ko = (v['ko'] ?? '').toString().trim();
+      final ko = (gl[zh] ?? v['ko'] ?? '').toString().trim();
       final note = (v['note'] ?? '').toString().trim();
       if (ko.isEmpty || note.length > 60) continue;
       final old = charMap[ko];
@@ -448,6 +453,52 @@ abstract final class KoVoice {
         [...b.rels.where((r) => !pairs.contains(r.pairKey)), ...add.rels],
       ).format(),
     );
+  }
+
+  // 용어집이 이름의 기준: 중국어 이름이 용어집에 있으면 인물 말투의 한국어 이름도 그걸로 바꿈
+  // (AI 자동 기록이 이름을 잘못 적어 둔 경우 등). 관계 규칙의 이름도 같이 바꿈.
+  static void renameByGlossary(Map<String, String> zhToKo) {
+    if (zhToKo.isEmpty) return;
+    for (final scope in books.keys.toList()) {
+      final b = book(scope);
+      final renames = <String, String>{};
+      final chars = [
+        for (final c in b.chars)
+          if (c.zh.isNotEmpty && zhToKo[c.zh] != null && zhToKo[c.zh] != c.ko)
+            () {
+              renames[c.ko] = zhToKo[c.zh]!;
+              return KoChar(c.zh, zhToKo[c.zh]!, c.note, auto: c.auto);
+            }()
+          else
+            c,
+      ];
+      if (renames.isEmpty) continue;
+      final rels = [
+        for (final r in b.rels)
+          KoRel(renames[r.from] ?? r.from, renames[r.to] ?? r.to, r.rule, auto: r.auto),
+      ];
+      // 바뀐 이름이 이미 있는 인물과 겹치면 직접 쓴 것(또는 먼저 있던 것)을 남김
+      final seen = <String>{};
+      final dedup = <KoChar>[];
+      for (final c in [...chars.where((c) => !c.auto), ...chars.where((c) => c.auto)]) {
+        if (seen.add(c.ko)) dedup.add(c);
+      }
+      setText(scope, KoVoiceBook(dedup, rels).format());
+    }
+  }
+
+  // 모든 용어집(공통 + 모든 작품) 기준으로 한 번 정리 (앱 켤 때)
+  static void fixNamesFromAllGlossaries() {
+    final m = <String, String>{};
+    for (final w in KoTr.works.reversed) {
+      for (final e in KoTr.parseGlossary(w.glossary)) {
+        m[e.key] = e.value;
+      }
+    }
+    for (final e in KoTr.parseGlossary(KoTr.commonGlossaryText)) {
+      m.putIfAbsent(e.key, () => e.value);
+    }
+    renameByGlossary(m);
   }
 
   // 고칠 때 고를 수 있는 인물 이름들

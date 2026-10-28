@@ -11,6 +11,7 @@ import 'dart:convert';
 
 import 'package:loftify/ko/ko_engines.dart';
 import 'package:loftify/ko/ko_memes.dart';
+import 'package:loftify/ko/ko_voice.dart';
 import 'package:loftify/ko/ko_compat.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show ValueNotifier;
@@ -264,6 +265,7 @@ abstract final class KoTr {
       target.glossary = _upsertLine(target.glossary, zh, ko);
       _set(kWorks, jsonEncode(works.map((e) => e.toJson()).toList()));
     }
+    KoVoice.renameByGlossary({zh: ko});
     retranslateContaining([zh]);
   }
 
@@ -271,14 +273,19 @@ abstract final class KoTr {
     final before = parseGlossary(commonGlossaryText);
     _set(kGlossary, text);
     final after = parseGlossary(text);
-    retranslateContaining(_diffKeys(before, after));
+    final keys = _diffKeys(before, after);
+    KoVoice.renameByGlossary({for (final e in after) if (keys.contains(e.key)) e.key: e.value});
+    retranslateContaining(keys);
   }
 
   static void setWorkGlossary(KoWork w, String text) {
     final before = parseGlossary(w.glossary);
     w.glossary = text;
     saveWorks();
-    retranslateContaining(_diffKeys(before, parseGlossary(text)));
+    final after = parseGlossary(text);
+    final keys = _diffKeys(before, after);
+    KoVoice.renameByGlossary({for (final e in after) if (keys.contains(e.key)) e.key: e.value});
+    retranslateContaining(keys);
   }
 
   static List<String> _diffKeys(

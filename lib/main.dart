@@ -19,6 +19,7 @@ import 'package:loftify/Utils/hive_util.dart';
 import 'package:loftify/ko/ko_compat.dart';
 import 'package:loftify/ko/ko_presets.dart';
 import 'package:loftify/ko/ko_startup.dart';
+import 'package:loftify/ko/ko_voice.dart';
 import 'package:hive/hive.dart';
 import 'package:loftify/Utils/loftify_file_util.dart';
 import 'package:loftify/Utils/lottie_files.dart';
@@ -112,6 +113,7 @@ Future<void> initApp() async {
   await koStep('번역 저장소', () => GStorage.init(appDir)); // 한국어 번역 설정 (깨진 상자는 안에서 비우고 다시 엶)
   koStartupErrors.addAll(GStorage.problems.map((e) => '번역 저장소: $e'));
   await koStep('기본 제공 말투', () async => KoPresets.seedOnce());
+  await koStep('인물 이름 정리', () async => KoVoice.fixNamesFromAllGlossaries());
   await koStep('화면 설정', () async => await ResponsiveUtil.init());
   LoftifyFileUtil.configureDownloadDelegates();
   await koStep('다운로드 관리', () async => await DownloadTaskManager.instance.initialize());

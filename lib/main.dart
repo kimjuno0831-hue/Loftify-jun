@@ -111,10 +111,10 @@ Future<void> initApp() async {
   );
   await koStep('번역 저장소', () => GStorage.init(appDir)); // 한국어 번역 설정 (깨진 상자는 안에서 비우고 다시 엶)
   await koStep('기본 제공 말투', () async => KoPresets.seedOnce());
-  await koStep('화면 설정', ResponsiveUtil.init);
+  await koStep('화면 설정', () async => await ResponsiveUtil.init());
   LoftifyFileUtil.configureDownloadDelegates();
-  await koStep('다운로드 관리', DownloadTaskManager.instance.initialize);
-  await koStep('네트워크', RequestUtil.init);
+  await koStep('다운로드 관리', () async => await DownloadTaskManager.instance.initialize());
+  await koStep('네트워크', () async => await RequestUtil.init());
   UriUtil.processUrl = LoftifyUriUtil.processUrl;
 }
 

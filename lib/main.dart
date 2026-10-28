@@ -110,6 +110,7 @@ Future<void> initApp() async {
     },
   );
   await koStep('번역 저장소', () => GStorage.init(appDir)); // 한국어 번역 설정 (깨진 상자는 안에서 비우고 다시 엶)
+  koStartupErrors.addAll(GStorage.problems.map((e) => '번역 저장소: $e'));
   await koStep('기본 제공 말투', () async => KoPresets.seedOnce());
   await koStep('화면 설정', () async => await ResponsiveUtil.init());
   LoftifyFileUtil.configureDownloadDelegates();

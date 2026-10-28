@@ -560,13 +560,17 @@ abstract final class KoTr {
     } catch (_) {}
   }
 
+  // 짧은 글만 저장하고 개수를 작게 유지 (상자가 커지면 켤 때 느려지거나 깨지기 쉬움)
+  static int _diskPuts = 0;
   static void _diskPut(int st, String src, String ko) {
+    if (src.length > 300) return;
     try {
       final box = GStorage.texts;
       box.put('$st|$src', ko);
-      if (box.length > 40000) {
-        box.deleteAll(box.keys.take(10000).toList());
+      if (box.length > 12000) {
+        box.deleteAll(box.keys.take(3000).toList());
       }
+      if (++_diskPuts % 500 == 0) box.compact();
     } catch (_) {}
   }
 

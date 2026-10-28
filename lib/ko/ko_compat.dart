@@ -1,6 +1,8 @@
 // pili-ko(PiliPlus) 번역 모듈을 Loftify에서 그대로 쓰기 위한 연결 부분.
 // PiliPlus의 저장소·화면 이동·알림 창 대신 Loftify에 있는 것들로 이어 줌.
 import 'package:awesome_chewie/awesome_chewie.dart' show chewieProvider, IToast;
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
@@ -17,17 +19,31 @@ abstract final class GStorage {
   static Box get texts => Hive.box(textBox);
 
   // main.dart 에서 HiveUtil.initBox() 다음에 부름
+  // 열다가 생긴 문제 (시작 알림에 보여줌)
+  static final List<String> problems = [];
+
   static Future<void> init(String path) async {
     for (final name in [settingBox, chapterBox, textBox]) {
       try {
         await Hive.openBox(name, path: path).timeout(const Duration(seconds: 15));
-      } catch (_) {
-        // 강제 종료 등으로 깨졌으면 그 상자만 비우고 새로 엶 (설정이 깨진 경우 번역 설정만 초기화됨)
+      } catch (e) {
+        // 강제 종료 등으로 깨졌거나 너무 커서 못 열면 그 상자만 비우고 새로 엶
+        problems.add('$name 상자를 열지 못해서 비우고 새로 열었어요 ($e)');
         try {
           if (Hive.isBoxOpen(name)) await Hive.box(name).close();
         } catch (_) {}
-        await Hive.deleteBoxFromDisk(name, path: path);
-        await Hive.openBox(name, path: path);
+        // 파일을 직접 지움 (일부 파일이 없어도 계속)
+        for (final ext in ['hive', 'hivec', 'lock']) {
+          try {
+            final f = File('$path/$name.$ext');
+            if (f.existsSync()) f.deleteSync();
+          } catch (_) {}
+        }
+        try {
+          await Hive.openBox(name, path: path);
+        } catch (e2) {
+          problems.add('$name 상자를 새로 열지도 못했어요 ($e2)');
+        }
       }
     }
   }

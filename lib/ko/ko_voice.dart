@@ -203,9 +203,11 @@ abstract final class KoVoice {
       return f && t;
     }).toList();
     if (chars.isEmpty && rels.isEmpty) return '';
-    final sb = StringBuffer('\n\n[인물 말투 - 반드시 지켜라. 한국어 말투는 말하는 사람과 듣는 사람의 관계로 정한다]\n');
+    final sb = StringBuffer(
+      '\n\n[인물 말투 - 반드시 지켜라. 인물별 기본 말투를 따르되, 아래 관계 규칙이 있는 상대에게는 관계 규칙이 우선한다]\n',
+    );
     for (final c in chars.take(20)) {
-      sb.writeln('· ${c.zh.isEmpty ? c.ko : '${c.zh}(${c.ko})'}${c.note.isEmpty ? '' : ': ${c.note}'}');
+      sb.writeln('· ${c.zh.isEmpty ? c.ko : '${c.zh}(${c.ko})'}${c.note.isEmpty ? '' : ' 기본 말투·성격: ${c.note}'}');
     }
     for (final r in rels.take(30)) {
       sb.writeln('· ${r.from} → ${r.to == '*' ? '누구에게나' : r.to}: ${r.rule}');
@@ -260,6 +262,26 @@ abstract final class KoVoice {
     final rels = b.rels.where((r) => r.pairKey != '${from.trim()}>${to.trim()}').toList()
       ..add(KoRel(from.trim(), to.trim(), rule.trim()));
     setText(scope, KoVoiceBook(b.chars, rels).format());
+  }
+
+  // 인물 기본 말투 저장 (누구에게 말하든 기본으로). 같은 인물이면 바꿈
+  static void putChar(String scope, String ko, String note, {String zh = ''}) {
+    final b = book(scope);
+    final old = b.chars.where((c) => c.ko == ko.trim()).toList();
+    final chars = b.chars.where((c) => c.ko != ko.trim()).toList()
+      ..add(KoChar(zh.isNotEmpty ? zh : (old.isEmpty ? '' : old.first.zh), ko.trim(), note.trim()));
+    setText(scope, KoVoiceBook(chars, b.rels).format());
+  }
+
+  // 한 줄 지우기 (목록에서 바로 지울 때)
+  static void removeChar(String scope, String ko) {
+    final b = book(scope);
+    setText(scope, KoVoiceBook(b.chars.where((c) => c.ko != ko).toList(), b.rels).format());
+  }
+
+  static void removeRule(String scope, String pairKey) {
+    final b = book(scope);
+    setText(scope, KoVoiceBook(b.chars, b.rels.where((r) => r.pairKey != pairKey).toList()).format());
   }
 
   // 고칠 때 고를 수 있는 인물 이름들

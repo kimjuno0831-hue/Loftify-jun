@@ -77,7 +77,10 @@ class _KoPostBodyState extends State<KoPostBody> {
 
   void _prepare() {
     // 작품별 용어집 자동 적용: 제목·태그로 판단
-    KoTr.addContext('post:${widget.postId}', '${widget.title}\n${widget.tags.join('\n')}');
+    // (화면을 그리는 중에 다른 위젯을 바꾸지 않게 다음 순간에)
+    final key = 'post:${widget.postId}';
+    final ctx = '${widget.title}\n${widget.tags.join('\n')}';
+    Future.microtask(() => KoTr.addContext(key, ctx));
     _doc = KoChapter.parse(widget.content);
     _lines = [
       if (KoChapter.translateTitle && KoTr.hasCjk(widget.title)) widget.title.trim(),

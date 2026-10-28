@@ -48,6 +48,7 @@ class _KoPostBodyState extends State<KoPostBody> {
     super.initState();
     _prepare();
     KoTr.updates.addListener(_onUpdate);
+    KoTr.glossaryChanged.addListener(_onGlossary);
   }
 
   @override
@@ -61,17 +62,51 @@ class _KoPostBodyState extends State<KoPostBody> {
   @override
   void dispose() {
     KoTr.updates.removeListener(_onUpdate);
+    KoTr.glossaryChanged.removeListener(_onGlossary);
     super.dispose();
   }
 
-  // 직접 고친 번역이 바뀌면 다시 그림
-  int _ovCount = -1;
+  // 이 글의 문단을 직접 고친 번역이 바뀌면 다시 그림 (개수뿐 아니라 내용까지 비교)
+  int _ovSig = 0;
   void _onUpdate() {
     if (!mounted || !_showKo) return;
-    final n = KoTr.overrides.length;
-    if (n != _ovCount) {
-      _ovCount = n;
+    final sig = Object.hashAll(_lines.map((l) => KoTr.overrides[l.trim()]));
+    if (sig != _ovSig) {
+      _ovSig = sig;
       setState(() {});
+    }
+  }
+
+  // 용어집이 바뀌면 그 단어가 든 문단만 바로 다시 번역
+  bool _glossaryBusy = false;
+  Future<void> _onGlossary() async {
+    final keys = KoTr.glossaryChanged.value;
+    if (!mounted || keys.isEmpty || _map.isEmpty || _glossaryBusy) return;
+    final redo = _lines
+        .where((l) => _map.containsKey(l) && !KoTr.hasOverride(l) && keys.any(l.contains))
+        .toSet()
+        .toList();
+    if (redo.isEmpty) return;
+    _glossaryBusy = true;
+    try {
+      for (final l in redo) {
+        KoChapter.removeLine(widget.postId, l);
+      }
+      setState(() {
+        for (final l in redo) {
+          _map.remove(l);
+        }
+      });
+      await KoChapter.translate(widget.postId, _lines);
+      if (!mounted) return;
+      setState(() {
+        _map = KoChapter.savedMap(widget.postId);
+        _glossaryChanged = false;
+      });
+      KoDialog.showToast('용어집에 맞춰 문단 ${redo.length}개를 다시 번역했어요');
+    } catch (_) {
+    } finally {
+      _glossaryBusy = false;
     }
   }
 

@@ -226,7 +226,7 @@ abstract final class KoTr {
         .expand((w) => parseGlossary(w.glossary).map((e) => e.key))
         .toList();
     _activeNames = names;
-    retranslateContaining(changed);
+    retranslateContaining(changed, notify: false);
   }
 
   // 공통 용어집에 한 줄 추가 (같은 중국어가 있으면 바꿈)
@@ -274,8 +274,13 @@ abstract final class KoTr {
   }
 
   // 이 단어들이 들어간 번역을 버리고 다시 번역
-  static void retranslateContaining(List<String> keys) {
+  // 용어집에서 바뀐 중국어 단어들 (본문 번역이 듣고 그 단어가 든 문단만 다시 번역)
+  static final ValueNotifier<List<String>> glossaryChanged = ValueNotifier(const []);
+
+  // notify: 사용자가 용어집을 고친 경우만 본문에도 알림 (글을 옮겨 다니며 작품이 바뀐 건 제외)
+  static void retranslateContaining(List<String> keys, {bool notify = true}) {
     if (keys.isEmpty) return;
+    if (notify) glossaryChanged.value = List.of(keys);
     final redo = <String>{
       for (final c in _caches) ...c.keys.where((s) => keys.any((k) => s.contains(k))),
       ..._diskMatching(keys),

@@ -188,7 +188,23 @@ abstract final class KoVoice {
       add(book(workScope(w.name)));
     }
     add(book(story));
+    // 우선순위: 직접 쓴 것 > 기본 제공 카드 > AI 자동 기록.
+    // 카드(직접·기본 제공)가 있는 인물이 말하는 쪽인 자동 관계 규칙은 버림 (카드가 그 인물의 말투를 정함)
+    final carded = {for (final c in chars.values) if (!c.auto) c.ko};
+    final carded2 = {for (final c in chars.values) if (!c.auto && c.zh.isNotEmpty) c.zh};
+    rels.removeWhere((_, r) => r.auto && (carded.contains(r.from) || carded2.contains(r.from)));
     return KoVoiceBook(chars.values.toList(), rels.values.toList());
+  }
+
+  // 인물의 다른 이름들: 중국어 이름 + 용어집에서 그 인물로 옮기는 별명 (예: 箱子=이상, 小堂=돈키)
+  static Set<String> aliases(KoChar c) {
+    final out = <String>{if (c.zh.isNotEmpty) c.zh, c.ko};
+    for (final e in KoTr.glossary) {
+      final v = e.value.trim();
+      if (e.key.length < 2) continue; // 한 글자 별명은 다른 말과 헷갈려서 뺌
+      if (v == c.ko || (v.length >= 2 && c.ko.startsWith(v))) out.add(e.key);
+    }
+    return out..removeWhere((e) => e.isEmpty);
   }
 
   // 번역 지시에 넣을 부분: 이 덩어리에 나오는 인물 위주로 (없으면 빈 글)
@@ -196,9 +212,10 @@ abstract final class KoVoice {
     if (b.isEmpty) return '';
     bool appears(String name) => name.isNotEmpty && name != '*' && chunk.contains(name);
     // 중국어 이름 → 한국어 이름 (관계 규칙은 한국어 이름으로 적는 경우가 많음)
-    final zhOf = {for (final c in b.chars) c.ko: c.zh};
-    bool inChunk(String n) => appears(n) || appears(zhOf[n] ?? '');
-    final chars = b.chars.where((c) => appears(c.zh) || appears(c.ko)).toList();
+    // 한국어 이름 → 그 인물의 모든 이름 (원래 이름 + 별명)
+    final aka = {for (final c in b.chars) c.ko: aliases(c)};
+    bool inChunk(String n) => appears(n) || (aka[n]?.any(appears) ?? false);
+    final chars = b.chars.where((c) => aka[c.ko]!.any(appears)).toList();
     final names = {for (final c in chars) c.ko};
     final rels = b.rels.where((r) {
       final f = inChunk(r.from) || names.contains(r.from);
@@ -222,6 +239,10 @@ abstract final class KoVoice {
   // AI 가 돌려준 말투 기록을 연재 범위에 '(자동)' 으로 쌓음. 직접 적은 규칙은 건드리지 않음.
   static void record(String story, List rels, List chars) {
     if (!autoOn) return;
+    final all = merged(story);
+    final carded = {for (final c in all.chars) if (!c.auto) c.ko};
+    rels = [for (final v in rels) if (v is Map && !carded.contains((v['from'] ?? '').toString().trim())) v];
+    chars = [for (final v in chars) if (v is Map && !carded.contains((v['ko'] ?? '').toString().trim())) v];
     final b = book(story);
     final relMap = {for (final r in b.rels) r.pairKey: r};
     final charMap = {for (final c in b.chars) c.ko: c};

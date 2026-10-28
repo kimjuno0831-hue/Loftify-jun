@@ -132,7 +132,8 @@ class _KoPostBodyState extends State<KoPostBody> {
     // (화면을 그리는 중에 다른 위젯을 바꾸지 않게 다음 순간에)
     final key = 'post:${widget.postId}';
     final ctx = '${widget.title}\n${widget.tags.join('\n')}';
-    Future.microtask(() => KoTr.addContext(key, ctx));
+    final body = widget.content.length > 20000 ? widget.content.substring(0, 20000) : widget.content;
+    Future.microtask(() => KoTr.addContext(key, ctx, body: KoChapter.unescape(body.replaceAll(RegExp(r'<[^>]+>'), ' '))));
     _doc = KoChapter.parse(widget.content);
     _lines = [
       if (KoChapter.translateTitle && KoTr.hasCjk(widget.title)) widget.title.trim(),

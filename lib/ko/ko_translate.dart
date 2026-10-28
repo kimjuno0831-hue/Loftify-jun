@@ -191,12 +191,17 @@ abstract final class KoTr {
   static String _ctxKey = '';
   static String _ctxText = '';
 
-  static void addContext(String key, String? text) {
+  // body: 본문 앞부분 (제목·태그에 작품 표시가 없을 때, 본문에 그 작품 인물 이름이 둘 이상 나오면 적용)
+  static String _ctxBody = '';
+
+  static void addContext(String key, String? text, {String? body}) {
     if (key != _ctxKey) {
       _ctxKey = key;
       _ctxText = '';
+      _ctxBody = '';
     }
     if (text != null && text.isNotEmpty) _ctxText += '\n$text';
+    if (body != null && body.isNotEmpty) _ctxBody = body.length > 6000 ? body.substring(0, 6000) : body;
     _refreshActive();
   }
 
@@ -208,8 +213,18 @@ abstract final class KoTr {
     if (w.mode == 1) return true;
     if (w.mode == 2) return false;
     final t = _ctxText.toLowerCase();
-    if (t.isEmpty) return false;
-    return w.detectWords.any((d) => t.contains(d.toLowerCase()));
+    if (t.isNotEmpty && w.detectWords.any((d) => t.contains(d.toLowerCase()))) return true;
+    if (_ctxBody.isEmpty) return false;
+    // 본문: 알아볼 말이나 그 작품 용어집의 인물 이름(두 글자 이상)이 서로 다른 것으로 둘 이상
+    final words = <String>{
+      ...w.detectWords.where((d) => d.length >= 2),
+      ...parseGlossary(w.glossary).map((e) => e.key).where((k) => k.length >= 2),
+    };
+    var hits = 0;
+    for (final d in words) {
+      if (_ctxBody.contains(d) && ++hits >= 2) return true;
+    }
+    return false;
   }
 
   static List<KoWork> get activeWorks => works.where(isActive).toList();

@@ -266,6 +266,7 @@ abstract final class KoChapter {
     // 앞 내용 참고용 (이름·말투가 이어지게)
     var prevSrc = <String>[];
     var prevKo = <String>[];
+    var chunkNo = 0;
     for (final c in chunks) {
       List<String?> out = List.filled(c.length, null);
       var by = '';
@@ -298,8 +299,9 @@ abstract final class KoChapter {
       }
       done += c.length;
       onProgress?.call(done, todo.length);
-      // 중간에 앱을 닫아도 된 데까지는 남게
-      _save(postId, map, bys.join(', '), sig);
+      // 중간에 앱을 닫아도 된 데까지는 남게 (저장소에 너무 자주 쓰지 않게 세 덩어리마다·마지막에)
+      chunkNo++;
+      if (chunkNo % 3 == 0 || chunkNo == chunks.length) _save(postId, map, bys.join(', '), sig);
       prevSrc = c.length > 3 ? c.sublist(c.length - 3) : c;
       prevKo = [for (final s in prevSrc) map[s] ?? ''];
     }
@@ -361,7 +363,7 @@ abstract final class KoChapter {
         'JSON 객체 하나로만 답하라: {"t": [번역 배열], "v": [말투 기록], "c": [인물 기록]}. '
         't 는 입력과 같은 길이·같은 순서의 번역 문자열 배열이다. 항목을 합치거나 나누거나 빼지 마라. '
         'v 에는 이번 부분에서 네가 정해서 쓴 말투를 {"from": 말하는 사람 한국어 이름, "to": 듣는 사람 한국어 이름, "rule": "반말, \'박사\'라고 부름" 처럼 짧게} 로 적어라. '
-        '아래 [인물 말투]에 이미 있는 것과 같으면 빼고, 확실한 것만 최대 5개. 없으면 빈 배열. '
+        '아래 [인물 말투]에 카드가 있는 인물이 말하는 쪽인 것과 이미 있는 것은 빼고, 확실한 것만 최대 5개. 없으면 빈 배열. '
         'c 에는 처음 나온 주요 인물을 {"zh": 중국어 이름, "ko": 한국어 이름, "note": "말투·성격 짧게"} 로, 최대 3개. 없으면 빈 배열. 설명은 쓰지 마라.',
       );
     } else {

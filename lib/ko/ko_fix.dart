@@ -342,22 +342,36 @@ class _KoFixPageState extends State<KoFixPage> {
           selected: {_vBasic},
           onSelectionChanged: (v) => setState(() => _vBasic = v.first),
         ),
-        TextField(
-          controller: _vFrom,
-          decoration: InputDecoration(labelText: _vBasic ? '인물 (한국어 이름)' : '말하는 사람 (한국어 이름)'),
-        ),
-        pick(_vFrom),
-        if (!_vBasic) ...[
+        if (_vBasic) ...[
+          const SizedBox(height: 8),
+          const Text('고칠 인물을 누르세요. 말투 단계, 자주 쓰는 어미, 예시 대사까지 자세히 적을수록 잘 따라요.'),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final n in names.take(16))
+                ActionChip(
+                  label: Text(n),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _editBasic(n),
+                ),
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 16),
+                label: const Text('새 인물'),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _editBasic(null),
+              ),
+            ],
+          ),
+        ] else ...[
+          TextField(controller: _vFrom, decoration: const InputDecoration(labelText: '말하는 사람 (한국어 이름)')),
+          pick(_vFrom),
           TextField(controller: _vTo, decoration: const InputDecoration(labelText: '듣는 사람 (한국어 이름)')),
           pick(_vTo),
-        ],
-        TextField(
-          controller: _vRule,
-          decoration: InputDecoration(
-            labelText: '말투',
-            hintText: _vBasic ? '예) 반말, 무뚝뚝함 / 존댓말, 차분함' : "예) 반말, '박사'라고 부름",
+          TextField(
+            controller: _vRule,
+            decoration: const InputDecoration(labelText: '말투·호칭', hintText: "예) 반말, '박사'라고 부름"),
           ),
-        ),
+        ],
         const SizedBox(height: 8),
         DropdownButton<String?>(
           value: _vScope,
@@ -371,12 +385,40 @@ class _KoFixPageState extends State<KoFixPage> {
         ),
         Wrap(
           children: [
-            btn('저장', () => _saveVoice(retranslate: false)),
-            if (widget.retranslate != null) btn('저장하고 이 문단 다시 번역', () => _saveVoice(retranslate: true)),
+            if (!_vBasic) btn('저장', () => _saveVoice(retranslate: false)),
+            if (!_vBasic && widget.retranslate != null)
+              btn('저장하고 이 문단 다시 번역', () => _saveVoice(retranslate: true)),
+            if (_vBasic && widget.retranslate != null)
+              btn('이 문단 다시 번역', () {
+                KoTr.setOverride(widget.zh, null, rewant: false);
+                _setInfo('이 문단을 다시 번역하는 중…');
+                widget.retranslate!().then((_) => KoNav.back());
+              }),
           ],
         ),
       ],
     );
+  }
+
+  // 인물 기본 말투: 지금 적용 중인 카드(작품 기본·연재 합친 것)를 채워서 열고, 고른 범위에 저장
+  Future<void> _editBasic(String? name) async {
+    final story = widget.voiceStory!;
+    final scope = _vScope ?? story;
+    KoChar? cur;
+    if (name != null) {
+      final own = KoVoice.book(scope).chars.where((c) => c.ko == name);
+      final all = KoVoice.merged(story).chars.where((c) => c.ko == name);
+      cur = own.isNotEmpty ? own.first : (all.isNotEmpty ? all.first : KoChar('', name, ''));
+    }
+    final r = await koCharDialog(context, cur, name: name);
+    if (r == null) return;
+    if (r.ko.isEmpty) {
+      if (name != null) KoVoice.removeChar(scope, name);
+    } else {
+      KoVoice.putChar(scope, r.ko, r.note, zh: r.zh);
+      KoDialog.showToast("저장했어요. 이 문단에 바로 보려면 '이 문단 다시 번역'");
+    }
+    if (mounted) setState(() {});
   }
 
   void _saveVoice({required bool retranslate}) {

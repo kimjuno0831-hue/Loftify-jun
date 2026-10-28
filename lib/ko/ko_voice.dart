@@ -205,10 +205,11 @@ abstract final class KoVoice {
     }).toList();
     if (chars.isEmpty && rels.isEmpty) return '';
     final sb = StringBuffer(
-      '\n\n[인물 말투 - 반드시 지켜라. 인물별 기본 말투를 따르되, 아래 관계 규칙이 있는 상대에게는 관계 규칙이 우선한다]\n',
+      '\n\n[인물 말투 - 반드시 지켜라. 그 인물의 대사는 말투 단계·어미·자칭을 그대로 쓰고 예시 대사와 같은 느낌으로 옮겨라. '
+      '아래 관계 규칙이 있는 상대에게는 관계 규칙이 우선한다]\n',
     );
     for (final c in chars.take(20)) {
-      sb.writeln('· ${c.zh.isEmpty ? c.ko : '${c.zh}(${c.ko})'}${c.note.isEmpty ? '' : ' 기본 말투·성격: ${c.note}'}');
+      sb.writeln('· ${c.zh.isEmpty ? c.ko : '${c.zh}(${c.ko})'}${c.note.isEmpty ? '' : ' — ${c.note}'}');
     }
     for (final r in rels.take(30)) {
       sb.writeln('· ${r.from} → ${r.to == '*' ? '누구에게나' : r.to}: ${r.rule}');
@@ -295,13 +296,52 @@ abstract final class KoVoice {
   }
 
   static const _system =
-      '너는 중국 작품의 팬픽·소설을 한국어로 번역할 때 쓸 "인물 말투표"를 만든다. '
-      '각 인물의 기본 한국어 말투(존댓말/반말, 하십시오체·해요체·반말 등)와 성격·말버릇을 짧게, '
-      '그리고 기본 말투와 다른 말투를 쓰는 중요한 관계(누가 누구에게, 호칭 포함)를 적어라. '
-      '원작에서의 실제 말투와 관계, 그리고 그 작품 한국어판(정식 한국어 서비스)이 있다면 그 번역에서 쓰는 말투를 우선 근거로 삼아라. '
-      '이름의 중국어는 중국어판(간체) 실제 표기, 한국어는 한국어판 실제 표기로. 웹 검색 결과와 네 지식을 함께 쓰되 확신 없는 건 빼라. '
-      'JSON 객체 하나로만 답하라: {"c":[{"zh":"중국어 이름","ko":"한국어 이름","note":"기본 말투, 성격 (40자 이내)"}],'
-      ' "v":[{"from":"말하는 사람 한국어 이름","to":"듣는 사람 한국어 이름","rule":"말투, 호칭 (40자 이내)"}]}';
+      '너는 중국 작품의 팬픽·소설을 한국어로 번역할 때 쓸 "인물 말투표"를 만든다. 번역가가 이것만 보고 그 인물의 대사를 똑같은 말투로 쓸 수 있을 만큼 구체적이어야 한다. '
+      '인물마다 다음을 적어라. '
+      'level: 한국어 말투 단계를 뉘앙스까지 구체적으로 (예: "고풍스러운 하오체(일제강점기 문인 느낌)", "딱딱한 하십시오체", "부드러운 해요체", "거친 반말", "능글맞은 반말"). '
+      'endings: 그 인물이 자주 쓰는 어미·말끝 3~6개 (예: "~하오", "~구료", "~소", "~지 않소"). '
+      'self: 자기를 부르는 말 (예: "나", "저", "소생", 자기 이름으로 3인칭이면 "파우스트는(3인칭)"). '
+      'desc: 말하는 방식과 성격을 2~3문장으로 (말의 길이, 감정 표현, 자주 하는 말버릇, 다른 사람을 부르는 방식). '
+      'examples: 그 말투가 바로 드러나는 한국어 예시 대사 2~3개 (원작 한국어판 대사를 알면 그걸, 모르면 그 말투로 지어서). '
+      '그리고 기본 말투와 다른 말투를 쓰는 중요한 관계(누가 누구에게, 말투와 호칭)도 적어라. '
+      '원작 한국어판(정식 한국어 서비스나 원작이 한국어인 경우 원문)에서의 실제 말투를 최우선 근거로 삼고, 그다음 원작 설정, 웹 검색 결과 순으로. '
+      '이름의 중국어는 중국어판(간체) 실제 표기, 한국어는 한국어판 실제 표기로. 확신 없는 인물은 빼라. '
+      'JSON 객체 하나로만 답하라: {"c":[{"zh":"중국어 이름","ko":"한국어 이름","level":"...","endings":["~하오","~구료"],"self":"...","desc":"...","examples":["...","..."]}],'
+      ' "v":[{"from":"말하는 사람 한국어 이름","to":"듣는 사람 한국어 이름","rule":"말투와 호칭 (60자 이내)"}]}';
+
+  // 인물 카드 설명 칸을 정해진 순서로 이어 붙임 (한 줄에 저장)
+  static String composeNote({
+    String level = '',
+    String endings = '',
+    String self = '',
+    String desc = '',
+    List<String> examples = const [],
+  }) {
+    final parts = <String>[
+      if (level.trim().isNotEmpty) '말투: ${level.trim()}',
+      if (endings.trim().isNotEmpty) '어미: ${endings.trim()}',
+      if (self.trim().isNotEmpty) '자칭: ${self.trim()}',
+      if (desc.trim().isNotEmpty) '설명: ${desc.trim().replaceAll('\n', ' ')}',
+      if (examples.any((e) => e.trim().isNotEmpty))
+        '예: ${examples.where((e) => e.trim().isNotEmpty).map((e) => '"${e.trim().replaceAll('"', "'")}"').join(' ')}',
+    ];
+    return parts.join(' | ');
+  }
+
+  // 저장된 설명 칸을 다시 나눔 (편집 화면용). 형식이 아니면 전부 설명으로
+  static Map<String, String> splitNote(String note) {
+    final out = <String, String>{};
+    for (final p in note.split('|')) {
+      final t = p.trim();
+      final m = RegExp(r'^(말투|어미|자칭|설명|예)\s*[:：]\s*([\s\S]*)$').firstMatch(t);
+      if (m != null) {
+        out[m[1]!] = m[2]!.trim();
+      } else if (t.isNotEmpty) {
+        out['설명'] = [if (out['설명'] != null) out['설명']!, t].join(' ');
+      }
+    }
+    return out;
+  }
 
   static KoVoiceBook _fromJson(Map? o) {
     final chars = <KoChar>[];
@@ -310,7 +350,20 @@ abstract final class KoVoice {
     for (final c in (o['c'] is List ? o['c'] as List : const []).whereType<Map>()) {
       final ko = (c['ko'] ?? '').toString().trim();
       if (ko.isEmpty || chars.any((e) => e.ko == ko)) continue;
-      chars.add(KoChar((c['zh'] ?? '').toString().trim(), ko, (c['note'] ?? '').toString().trim()));
+      String str(String k) => (c[k] ?? '').toString().trim();
+      final endings = c['endings'] is List ? (c['endings'] as List).map((e) => e.toString()).join(', ') : str('endings');
+      final examples = c['examples'] is List
+          ? (c['examples'] as List).map((e) => e.toString()).toList()
+          : [if (str('examples').isNotEmpty) str('examples')];
+      var note = composeNote(
+        level: str('level'),
+        endings: endings,
+        self: str('self'),
+        desc: str('desc'),
+        examples: examples,
+      );
+      if (note.isEmpty) note = str('note');
+      chars.add(KoChar(str('zh'), ko, note));
     }
     for (final v in (o['v'] is List ? o['v'] as List : const []).whereType<Map>()) {
       final f = (v['from'] ?? '').toString().trim();
@@ -347,7 +400,7 @@ abstract final class KoVoice {
   static Future<KoVoiceBook> buildWork(String work) async {
     final web = await _web(['$work 등장인물 말투 성격', '$work 角色 性格 说话 口癖', '$work 캐릭터 관계']);
     final user = '[작품]\n$work${_glossaryHint(work)}\n\n[웹 검색 결과]\n$web\n\n'
-        '주요 인물 최대 25명, 중요한 관계 최대 25개.';
+        '주요 인물 최대 15명, 중요한 관계 최대 20개.';
     return _fromJson(_obj(await KoTr.ask(_system, user, json: true)));
   }
 

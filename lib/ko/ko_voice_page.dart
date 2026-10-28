@@ -105,7 +105,10 @@ class KoVoiceEditPage extends StatefulWidget {
 }
 
 class _KoVoiceEditPageState extends State<KoVoiceEditPage> {
+  bool _textMode = false;
   late final _ctrl = TextEditingController(text: KoVoice.text(widget.scope));
+
+  KoVoiceBook get _book => KoVoice.book(widget.scope);
 
   @override
   void dispose() {
@@ -113,10 +116,12 @@ class _KoVoiceEditPageState extends State<KoVoiceEditPage> {
     super.dispose();
   }
 
-  void _save() {
+  void _saveText() {
     KoVoice.setText(widget.scope, KoVoiceBook.parse(_ctrl.text).format());
-    KoDialog.showToast('저장했어요. 이미 번역한 글은 ⋮ → 처음부터 다시 번역하면 반영돼요');
-    Navigator.of(context).maybePop();
+  }
+
+  void _reload() {
+    if (mounted) setState(() => _ctrl.text = KoVoice.text(widget.scope));
   }
 
   // 작품 범위면 그 작품, 연재 범위면 지금 적용 중인 첫 작품
@@ -127,68 +132,293 @@ class _KoVoiceEditPageState extends State<KoVoiceEditPage> {
   }
 
   Future<void> _menu(String v) async {
+    if (_textMode) _saveText();
     switch (v) {
+      case 'text':
+        setState(() => _textMode = !_textMode);
+        _ctrl.text = KoVoice.text(widget.scope);
       case 'auto':
-        _clearAuto();
+        final b = _book;
+        KoVoice.setText(
+          widget.scope,
+          KoVoiceBook(b.chars.where((c) => !c.auto).toList(), b.rels.where((r) => !r.auto).toList()).format(),
+        );
+        _reload();
       case 'find':
-        // 입력 중인 것부터 저장하고 찾은 걸 더함
-        KoVoice.setText(widget.scope, KoVoiceBook.parse(_ctrl.text).format());
         await koVoiceLookup(context, widget.scope);
-        if (mounted) setState(() => _ctrl.text = KoVoice.text(widget.scope));
+        _reload();
       case 'build':
-        KoVoice.setText(widget.scope, KoVoiceBook.parse(_ctrl.text).format());
         await koVoiceBuildWork(context, _work!);
-        if (mounted) setState(() => _ctrl.text = KoVoice.text(widget.scope));
+        _reload();
         if (!widget.scope.startsWith('work:')) {
           KoDialog.showToast("'$_work' 작품 기본 말투에 넣었어요 (설정 → 인물 말투에서 볼 수 있어요)");
         }
     }
   }
 
-  void _clearAuto() {
-    final b = KoVoiceBook.parse(_ctrl.text);
-    _ctrl.text = KoVoiceBook(
-      b.chars.where((c) => !c.auto).toList(),
-      b.rels.where((r) => !r.auto).toList(),
-    ).format();
-    setState(() {});
+  Future<void> _editChar(KoChar? c) async {
+    final r = await koCharDialog(context, c);
+    if (r == null) return;
+    if (r.ko.isEmpty) {
+      if (c != null) KoVoice.removeChar(widget.scope, c.ko); // 지우기
+    } else {
+      if (c != null && c.ko != r.ko) KoVoice.removeChar(widget.scope, c.ko);
+      KoVoice.putChar(widget.scope, r.ko, r.note, zh: r.zh);
+    }
+    _reload();
+  }
+
+  Future<void> _editRel(KoRel? r) async {
+    final n = await koRelDialog(context, r, KoVoice.names(widget.scope));
+    if (n == null) return;
+    if (r != null) KoVoice.removeRule(widget.scope, r.pairKey);
+    if (n.rule.isNotEmpty) KoVoice.putRule(widget.scope, n.from, n.to, n.rule);
+    _reload();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final title = KoVoice.label(widget.scope, title: widget.title);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title, overflow: TextOverflow.ellipsis),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: _menu,
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'find', child: Text('인물 찾아서 넣기')),
-              if (_work != null) PopupMenuItem(value: 'build', child: Text("AI로 '$_work' 인물 말투 채우기")),
-              const PopupMenuItem(value: 'auto', child: Text('자동 기록 줄 모두 지우기')),
-            ],
-          ),
-          TextButton(onPressed: _save, child: const Text('저장')),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(_help, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _ctrl,
-            minLines: 12,
-            maxLines: null,
-            style: const TextStyle(fontSize: 14, height: 1.5),
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-        ],
+    final b = _book;
+    TextStyle sub(bool auto) => TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: auto ? 0.7 : 1));
+    return PopScope(
+      onPopInvokedWithResult: (_, __) {
+        if (_textMode) _saveText();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(title, overflow: TextOverflow.ellipsis),
+          actions: [
+            PopupMenuButton<String>(
+              onSelected: _menu,
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'find', child: Text('인물 찾아서 넣기')),
+                if (_work != null) PopupMenuItem(value: 'build', child: Text("AI로 '$_work' 인물 말투 채우기")),
+                PopupMenuItem(value: 'text', child: Text(_textMode ? '카드로 보기' : '텍스트로 한꺼번에 편집')),
+                const PopupMenuItem(value: 'auto', child: Text('자동 기록 모두 지우기')),
+              ],
+            ),
+          ],
+        ),
+        body: _textMode
+            ? ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(_help, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _ctrl,
+                    minLines: 12,
+                    maxLines: null,
+                    style: const TextStyle(fontSize: 14, height: 1.5),
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: () {
+                      _saveText();
+                      KoDialog.showToast('저장했어요');
+                      setState(() => _textMode = false);
+                    },
+                    child: const Text('저장'),
+                  ),
+                ],
+              )
+            : ListView(
+                children: [
+                  ListTile(
+                    title: Text('인물 ${b.chars.length}', style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold)),
+                    trailing: TextButton.icon(
+                      onPressed: () => _editChar(null),
+                      icon: const Icon(Icons.add),
+                      label: const Text('인물 추가'),
+                    ),
+                  ),
+                  for (final c in b.chars)
+                    ListTile(
+                      title: Text('${c.auto ? '(자동) ' : ''}${c.ko}${c.zh.isEmpty ? '' : '  ${c.zh}'}'),
+                      subtitle: Text(
+                        c.note.replaceAll(' | ', '\n'),
+                        style: sub(c.auto),
+                        maxLines: 6,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      isThreeLine: true,
+                      onTap: () => _editChar(c),
+                    ),
+                  const Divider(),
+                  ListTile(
+                    title: Text('관계 ${b.rels.length}', style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('기본 말투와 다르게 말하는 상대만'),
+                    trailing: TextButton.icon(
+                      onPressed: () => _editRel(null),
+                      icon: const Icon(Icons.add),
+                      label: const Text('관계 추가'),
+                    ),
+                  ),
+                  for (final r in b.rels)
+                    ListTile(
+                      title: Text('${r.auto ? '(자동) ' : ''}${r.from} → ${r.to == '*' ? '누구에게나' : r.to}'),
+                      subtitle: Text(r.rule, style: sub(r.auto)),
+                      onTap: () => _editRel(r),
+                    ),
+                  const SizedBox(height: 32),
+                ],
+              ),
       ),
     );
   }
+}
+
+// 인물 카드 입력 창. 돌려준 KoChar 의 ko 가 빈칸이면 '지우기'
+Future<KoChar?> koCharDialog(BuildContext context, KoChar? c, {String? name}) async {
+  final parts = KoVoice.splitNote(c?.note ?? '');
+  final ko = TextEditingController(text: c?.ko ?? name ?? '');
+  final zh = TextEditingController(text: c?.zh ?? '');
+  final level = TextEditingController(text: parts['말투'] ?? '');
+  final endings = TextEditingController(text: parts['어미'] ?? '');
+  final self = TextEditingController(text: parts['자칭'] ?? '');
+  final desc = TextEditingController(text: parts['설명'] ?? '');
+  final ex = TextEditingController(
+    text: RegExp(r'"([^"]*)"').allMatches(parts['예'] ?? '').map((m) => m[1]!).join('\n'),
+  );
+  Widget f(TextEditingController c, String label, {String? hint, int lines = 1}) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: TextField(
+      controller: c,
+      minLines: lines,
+      maxLines: lines == 1 ? 1 : null,
+      decoration: InputDecoration(labelText: label, hintText: hint, isDense: true),
+    ),
+  );
+  final r = await showDialog<KoChar>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(c == null ? '인물 추가' : '인물 말투'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            f(ko, '한국어 이름'),
+            f(zh, '중국어 이름 (있으면)'),
+            f(level, '말투 단계', hint: '예) 고풍스러운 하오체 (일제강점기 문인 느낌)'),
+            f(endings, '자주 쓰는 어미', hint: '예) ~하오, ~구료, ~소, ~지 않소'),
+            f(self, '자기를 부르는 말', hint: '예) 나 / 저 / 자기 이름으로 3인칭'),
+            f(desc, '말하는 방식·성격', hint: '말의 길이, 감정 표현, 말버릇, 남을 부르는 방식', lines: 3),
+            f(ex, '예시 대사 (한 줄에 하나)', hint: '그 말투가 바로 드러나는 대사', lines: 3),
+          ],
+        ),
+      ),
+      actions: [
+        if (c != null)
+          TextButton(
+            onPressed: () => Navigator.pop(context, KoChar('', '', '')),
+            child: const Text('지우기'),
+          ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+        TextButton(
+          onPressed: () {
+            if (ko.text.trim().isEmpty) {
+              KoDialog.showToast('한국어 이름을 적어 주세요');
+              return;
+            }
+            Navigator.pop(
+              context,
+              KoChar(
+                zh.text.trim(),
+                ko.text.trim(),
+                KoVoice.composeNote(
+                  level: level.text,
+                  endings: endings.text,
+                  self: self.text,
+                  desc: desc.text,
+                  examples: ex.text.split('\n'),
+                ),
+              ),
+            );
+          },
+          child: const Text('저장'),
+        ),
+      ],
+    ),
+  );
+  for (final t in [ko, zh, level, endings, self, desc, ex]) {
+    t.dispose();
+  }
+  return r;
+}
+
+// 관계 규칙 입력 창. 돌려준 rule 이 빈칸이면 '지우기'
+Future<KoRel?> koRelDialog(BuildContext context, KoRel? r, List<String> names) async {
+  final from = TextEditingController(text: r?.from ?? '');
+  final to = TextEditingController(text: r?.to ?? '');
+  final rule = TextEditingController(text: r?.rule ?? '');
+  final res = await showDialog<KoRel>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        Widget pick(TextEditingController c) => Wrap(
+          spacing: 6,
+          children: [
+            for (final n in names.take(12))
+              ActionChip(
+                label: Text(n),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => c.text = n),
+              ),
+          ],
+        );
+        return AlertDialog(
+          title: Text(r == null ? '관계 추가' : '관계 말투'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                TextField(controller: from, decoration: const InputDecoration(labelText: '말하는 사람')),
+                pick(from),
+                TextField(controller: to, decoration: const InputDecoration(labelText: '듣는 사람')),
+                pick(to),
+                TextField(
+                  controller: rule,
+                  minLines: 2,
+                  maxLines: null,
+                  decoration: const InputDecoration(
+                    labelText: '말투·호칭',
+                    hintText: "예) 반말, 다정함. '아미야'라고 이름으로 부름",
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (r != null)
+              TextButton(
+                onPressed: () => Navigator.pop(context, KoRel(r.from, r.to, '')),
+                child: const Text('지우기'),
+              ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+            TextButton(
+              onPressed: () {
+                if (from.text.trim().isEmpty || to.text.trim().isEmpty || rule.text.trim().isEmpty) {
+                  KoDialog.showToast('말하는 사람, 듣는 사람, 말투를 모두 적어 주세요');
+                  return;
+                }
+                Navigator.pop(context, KoRel(from.text.trim(), to.text.trim(), rule.text.trim().replaceAll('\n', ' ')));
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+  for (final t in [from, to, rule]) {
+    t.dispose();
+  }
+  return res;
 }
 
 // ── AI 로 채우기 (작품 전체 / 인물 한 명) ──
@@ -225,7 +455,7 @@ Future<int> _pickAndAdd(BuildContext context, String scope, KoVoiceBook found) a
                     '${found.chars[i].ko}${found.chars[i].zh.isEmpty ? '' : ' (${found.chars[i].zh})'}'
                     '${haveChars.containsKey(found.chars[i].ko) ? '  [이미 있음]' : ''}',
                   ),
-                  subtitle: Text('기본: ${found.chars[i].note}'),
+                  subtitle: Text(found.chars[i].note.replaceAll(' | ', '\n')),
                 ),
               for (var i = 0; i < found.rels.length; i++)
                 CheckboxListTile(

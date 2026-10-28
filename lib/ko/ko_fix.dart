@@ -320,10 +320,18 @@ class _KoFixPageState extends State<KoFixPage> {
         _voiceList(),
         Align(
           alignment: Alignment.centerLeft,
-          child: btn('이 연재 말투 전체 보기·고치기', () async {
-            await KoNav.to(() => KoVoiceEditPage(scope: story, title: KoVoice.titleOf(story)));
-            if (mounted) setState(() {});
-          }),
+          child: Wrap(
+            children: [
+              btn('전체 보기·고치기', () async {
+                await KoNav.to(() => KoVoiceEditPage(scope: story, title: KoVoice.titleOf(story)));
+                if (mounted) setState(() {});
+              }),
+              btn('인물 찾아서 넣기', () async {
+                await koVoiceLookup(context, _vScope ?? story);
+                if (mounted) setState(() {});
+              }),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         SegmentedButton<bool>(

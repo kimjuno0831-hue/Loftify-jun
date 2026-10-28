@@ -68,11 +68,16 @@ class _KoVoiceListPageState extends State<KoVoiceListPage> {
           if (works.isNotEmpty) const Divider(),
           for (final w in works)
             ListTile(
-              leading: const Icon(Icons.add),
+              leading: const Icon(Icons.auto_awesome),
               title: Text('작품 기본 만들기: ${w.name}'),
+              subtitle: const Text('AI가 웹 검색으로 주요 인물 말투를 채워요 (직접 쓰려면 길게 누르기)'),
               onTap: () async {
+                await koVoiceBuildWork(context, w.name);
+                if (mounted) setState(() {});
+              },
+              onLongPress: () async {
                 await KoNav.to(() => KoVoiceEditPage(scope: KoVoice.workScope(w.name)));
-                setState(() {});
+                if (mounted) setState(() {});
               },
             ),
           if (scopes.isEmpty && works.isEmpty)
@@ -114,6 +119,32 @@ class _KoVoiceEditPageState extends State<KoVoiceEditPage> {
     Navigator.of(context).maybePop();
   }
 
+  // 작품 범위면 그 작품, 연재 범위면 지금 적용 중인 첫 작품
+  String? get _work {
+    if (widget.scope.startsWith('work:')) return widget.scope.substring(5);
+    final w = KoTr.activeWorks;
+    return w.isEmpty ? null : w.first.name;
+  }
+
+  Future<void> _menu(String v) async {
+    switch (v) {
+      case 'auto':
+        _clearAuto();
+      case 'find':
+        // 입력 중인 것부터 저장하고 찾은 걸 더함
+        KoVoice.setText(widget.scope, KoVoiceBook.parse(_ctrl.text).format());
+        await koVoiceLookup(context, widget.scope);
+        if (mounted) setState(() => _ctrl.text = KoVoice.text(widget.scope));
+      case 'build':
+        KoVoice.setText(widget.scope, KoVoiceBook.parse(_ctrl.text).format());
+        await koVoiceBuildWork(context, _work!);
+        if (mounted) setState(() => _ctrl.text = KoVoice.text(widget.scope));
+        if (!widget.scope.startsWith('work:')) {
+          KoDialog.showToast("'$_work' 작품 기본 말투에 넣었어요 (설정 → 인물 말투에서 볼 수 있어요)");
+        }
+    }
+  }
+
   void _clearAuto() {
     final b = KoVoiceBook.parse(_ctrl.text);
     _ctrl.text = KoVoiceBook(
@@ -132,10 +163,12 @@ class _KoVoiceEditPageState extends State<KoVoiceEditPage> {
         title: Text(title, overflow: TextOverflow.ellipsis),
         actions: [
           PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v == 'auto') _clearAuto();
-            },
-            itemBuilder: (_) => const [PopupMenuItem(value: 'auto', child: Text('자동 기록 줄 모두 지우기'))],
+            onSelected: _menu,
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'find', child: Text('인물 찾아서 넣기')),
+              if (_work != null) PopupMenuItem(value: 'build', child: Text("AI로 '$_work' 인물 말투 채우기")),
+              const PopupMenuItem(value: 'auto', child: Text('자동 기록 줄 모두 지우기')),
+            ],
           ),
           TextButton(onPressed: _save, child: const Text('저장')),
         ],
@@ -156,4 +189,140 @@ class _KoVoiceEditPageState extends State<KoVoiceEditPage> {
       ),
     );
   }
+}
+
+// ── AI 로 채우기 (작품 전체 / 인물 한 명) ──
+
+// 찾은 인물·관계를 보여주고 고른 것만 넣기
+Future<int> _pickAndAdd(BuildContext context, String scope, KoVoiceBook found) async {
+  if (found.isEmpty) {
+    KoDialog.showToast('찾은 게 없어요');
+    return 0;
+  }
+  final have = KoVoice.book(scope);
+  final haveChars = {for (final c in have.chars) c.ko: c};
+  final havePairs = {for (final r in have.rels) r.pairKey: r};
+  // 이미 직접 적어 둔 건 기본으로 체크 해제
+  final cOn = [for (final c in found.chars) !(haveChars[c.ko]?.auto == false)];
+  final rOn = [for (final r in found.rels) !(havePairs[r.pairKey]?.auto == false)];
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('넣을 항목 (틀린 건 체크 해제)'),
+        contentPadding: const EdgeInsets.only(top: 8),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (var i = 0; i < found.chars.length; i++)
+                CheckboxListTile(
+                  dense: true,
+                  value: cOn[i],
+                  onChanged: (v) => setState(() => cOn[i] = v ?? false),
+                  title: Text(
+                    '${found.chars[i].ko}${found.chars[i].zh.isEmpty ? '' : ' (${found.chars[i].zh})'}'
+                    '${haveChars.containsKey(found.chars[i].ko) ? '  [이미 있음]' : ''}',
+                  ),
+                  subtitle: Text('기본: ${found.chars[i].note}'),
+                ),
+              for (var i = 0; i < found.rels.length; i++)
+                CheckboxListTile(
+                  dense: true,
+                  value: rOn[i],
+                  onChanged: (v) => setState(() => rOn[i] = v ?? false),
+                  title: Text(
+                    '${found.rels[i].from} → ${found.rels[i].to}'
+                    '${havePairs.containsKey(found.rels[i].pairKey) ? '  [이미 있음]' : ''}',
+                  ),
+                  subtitle: Text(found.rels[i].rule),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('넣기')),
+        ],
+      ),
+    ),
+  );
+  if (ok != true) return 0;
+  final add = KoVoiceBook(
+    [for (var i = 0; i < found.chars.length; i++) if (cOn[i]) found.chars[i]],
+    [for (var i = 0; i < found.rels.length; i++) if (rOn[i]) found.rels[i]],
+  );
+  KoVoice.addAll(scope, add);
+  final n = add.chars.length + add.rels.length;
+  KoDialog.showToast('$n개를 넣었어요');
+  return n;
+}
+
+bool _needAi() {
+  if (KoTr.hasAi) return false;
+  KoDialog.showToast('AI 번역기가 필요해요 (번역 설정 → AI 번역기)');
+  return true;
+}
+
+// 작품 전체 인물 말투 초안 → 작품 기본에 넣기
+Future<void> koVoiceBuildWork(BuildContext context, String work) async {
+  if (_needAi()) return;
+  KoDialog.showLoading(msg: "'$work' 인물 말투를 찾는 중…\n(웹 검색 후 AI가 정리해요)");
+  KoVoiceBook found;
+  try {
+    found = await KoVoice.buildWork(work);
+  } catch (e) {
+    KoDialog.dismiss();
+    KoDialog.showToast('실패: $e');
+    return;
+  }
+  KoDialog.dismiss();
+  if (!context.mounted) return;
+  await _pickAndAdd(context, KoVoice.workScope(work), found);
+}
+
+// 인물 이름을 받아 찾아서 넣기
+Future<void> koVoiceLookup(BuildContext context, String scope) async {
+  if (_needAi()) return;
+  final works = KoTr.activeWorks.map((e) => e.name).toList();
+  final work = scope.startsWith('work:') ? scope.substring(5) : (works.isEmpty ? null : works.first);
+  final ctrl = TextEditingController();
+  final name = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('인물 찾아서 넣기'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(work == null ? '작품을 모르면 이름만으로 찾아요.' : '작품: $work', style: const TextStyle(fontSize: 12)),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: '인물 이름 (한국어나 중국어)'),
+            onSubmitted: (v) => Navigator.pop(context, v),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+        TextButton(onPressed: () => Navigator.pop(context, ctrl.text), child: const Text('찾기')),
+      ],
+    ),
+  );
+  ctrl.dispose();
+  if (name == null || name.trim().isEmpty) return;
+  KoDialog.showLoading(msg: "'${name.trim()}' 찾는 중…");
+  KoVoiceBook found;
+  try {
+    found = await KoVoice.lookupChar(name.trim(), work: work);
+  } catch (e) {
+    KoDialog.dismiss();
+    KoDialog.showToast('실패: $e');
+    return;
+  }
+  KoDialog.dismiss();
+  if (!context.mounted) return;
+  await _pickAndAdd(context, scope, found);
 }

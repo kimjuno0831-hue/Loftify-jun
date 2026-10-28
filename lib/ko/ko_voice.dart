@@ -7,6 +7,7 @@
 import 'dart:convert';
 
 import 'package:loftify/ko/ko_compat.dart';
+import 'package:loftify/ko/ko_lookup.dart';
 import 'package:loftify/ko/ko_translate.dart';
 
 class KoChar {
@@ -282,6 +283,95 @@ abstract final class KoVoice {
   static void removeRule(String scope, String pairKey) {
     final b = book(scope);
     setText(scope, KoVoiceBook(b.chars, b.rels.where((r) => r.pairKey != pairKey).toList()).format());
+  }
+
+  // ── AI 로 채우기 ──
+  static String _glossaryHint(String? work) {
+    if (work == null) return '';
+    final w = KoTr.works.where((e) => e.name == work).toList();
+    if (w.isEmpty) return '';
+    final g = KoTr.parseGlossary(w.first.glossary).take(60).map((e) => '${e.key}=${e.value}').join('\n');
+    return g.isEmpty ? '' : '\n\n[이 작품 용어집 - 이름 표기는 이걸 따르라]\n$g';
+  }
+
+  static const _system =
+      '너는 중국 작품의 팬픽·소설을 한국어로 번역할 때 쓸 "인물 말투표"를 만든다. '
+      '각 인물의 기본 한국어 말투(존댓말/반말, 하십시오체·해요체·반말 등)와 성격·말버릇을 짧게, '
+      '그리고 기본 말투와 다른 말투를 쓰는 중요한 관계(누가 누구에게, 호칭 포함)를 적어라. '
+      '원작에서의 실제 말투와 관계, 그리고 그 작품 한국어판(정식 한국어 서비스)이 있다면 그 번역에서 쓰는 말투를 우선 근거로 삼아라. '
+      '이름의 중국어는 중국어판(간체) 실제 표기, 한국어는 한국어판 실제 표기로. 웹 검색 결과와 네 지식을 함께 쓰되 확신 없는 건 빼라. '
+      'JSON 객체 하나로만 답하라: {"c":[{"zh":"중국어 이름","ko":"한국어 이름","note":"기본 말투, 성격 (40자 이내)"}],'
+      ' "v":[{"from":"말하는 사람 한국어 이름","to":"듣는 사람 한국어 이름","rule":"말투, 호칭 (40자 이내)"}]}';
+
+  static KoVoiceBook _fromJson(Map? o) {
+    final chars = <KoChar>[];
+    final rels = <KoRel>[];
+    if (o == null) return KoVoiceBook(chars, rels);
+    for (final c in (o['c'] is List ? o['c'] as List : const []).whereType<Map>()) {
+      final ko = (c['ko'] ?? '').toString().trim();
+      if (ko.isEmpty || chars.any((e) => e.ko == ko)) continue;
+      chars.add(KoChar((c['zh'] ?? '').toString().trim(), ko, (c['note'] ?? '').toString().trim()));
+    }
+    for (final v in (o['v'] is List ? o['v'] as List : const []).whereType<Map>()) {
+      final f = (v['from'] ?? '').toString().trim();
+      final t = (v['to'] ?? '').toString().trim();
+      final r = (v['rule'] ?? '').toString().trim();
+      if (f.isEmpty || t.isEmpty || r.isEmpty) continue;
+      rels.add(KoRel(f, t, r));
+    }
+    return KoVoiceBook(chars, rels);
+  }
+
+  static Map? _obj(String raw) {
+    final a = raw.indexOf('{');
+    final b = raw.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    try {
+      final o = jsonDecode(raw.substring(a, b + 1));
+      return o is Map ? o : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String> _web(List<String> queries) async {
+    final web = StringBuffer();
+    for (final q in queries) {
+      final r = await KoLookup.search(q, maxChars: 2500);
+      if (r.isNotEmpty) web.write('### 검색어: $q\n$r\n\n');
+    }
+    return web.isEmpty ? '(검색 결과를 가져오지 못함 — 네 지식으로만, 확신 있는 것만)' : web.toString();
+  }
+
+  // 작품 전체 인물 말투표 초안
+  static Future<KoVoiceBook> buildWork(String work) async {
+    final web = await _web(['$work 등장인물 말투 성격', '$work 角色 性格 说话 口癖', '$work 캐릭터 관계']);
+    final user = '[작품]\n$work${_glossaryHint(work)}\n\n[웹 검색 결과]\n$web\n\n'
+        '주요 인물 최대 25명, 중요한 관계 최대 25개.';
+    return _fromJson(_obj(await KoTr.ask(_system, user, json: true)));
+  }
+
+  // 인물 한 명 찾아서 채우기 (이름은 한국어든 중국어든)
+  static Future<KoVoiceBook> lookupChar(String name, {String? work}) async {
+    final w = work ?? '';
+    final web = await _web(['$w $name 캐릭터 말투 성격', '$w $name 角色 性格 说话', '$w $name 관계']);
+    final user = '[작품]\n${w.isEmpty ? '(모름 — 이름으로 판단)' : w}${_glossaryHint(work)}\n\n[찾을 인물]\n$name\n\n'
+        '[웹 검색 결과]\n$web\n\n이 인물 한 명의 c 항목과, 이 인물이 말하는 쪽(from)인 중요한 관계 최대 6개만.';
+    return _fromJson(_obj(await KoTr.ask(_system, user, json: true)));
+  }
+
+  // 찾은 걸 범위에 넣기 (같은 인물·같은 관계는 바꿈)
+  static void addAll(String scope, KoVoiceBook add) {
+    final b = book(scope);
+    final names = {for (final c in add.chars) c.ko};
+    final pairs = {for (final r in add.rels) r.pairKey};
+    setText(
+      scope,
+      KoVoiceBook(
+        [...b.chars.where((c) => !names.contains(c.ko)), ...add.chars],
+        [...b.rels.where((r) => !pairs.contains(r.pairKey)), ...add.rels],
+      ).format(),
+    );
   }
 
   // 고칠 때 고를 수 있는 인물 이름들

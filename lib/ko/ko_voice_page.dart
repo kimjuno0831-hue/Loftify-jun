@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:loftify/ko/ko_compat.dart';
 import 'package:loftify/ko/ko_translate.dart';
 import 'package:loftify/ko/ko_voice.dart';
+import 'package:loftify/ko/ko_presets.dart';
 
 const _help = '한 줄에 하나씩.\n'
     "인물:  阿米娅=아미야 | 존댓말, 밝고 다정함\n"
@@ -65,7 +66,31 @@ class _KoVoiceListPageState extends State<KoVoiceListPage> {
                 setState(() {});
               },
             ),
-          if (works.isNotEmpty) const Divider(),
+          const Divider(),
+          for (final p in workPresets)
+            ListTile(
+              leading: const Icon(Icons.restore),
+              title: Text('기본 제공 말투 다시 넣기: ${p.name}'),
+              subtitle: const Text('앱에 들어 있는 인물 말투로 덮어써요 (다른 인물·직접 추가한 관계는 그대로)'),
+              onTap: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text('${p.name} 기본 말투로 되돌릴까요?'),
+                    content: const Text('기본 제공에 있는 인물·관계는 기본값으로 바뀌어요. 그 인물들을 직접 고친 내용은 사라져요.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('되돌리기')),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
+                KoPresets.apply(p); // 작품·용어집이 없으면 만들고
+                KoPresets.reset(p);
+                KoDialog.showToast('되돌렸어요');
+                if (mounted) setState(() {});
+              },
+            ),
           for (final w in works)
             ListTile(
               leading: const Icon(Icons.auto_awesome),

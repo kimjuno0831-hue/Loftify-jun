@@ -17,6 +17,7 @@ import 'package:loftify/Utils/display_mode_util.dart';
 import 'package:loftify/Utils/download_task_manager.dart';
 import 'package:loftify/Utils/hive_util.dart';
 import 'package:loftify/ko/ko_compat.dart';
+import 'package:loftify/ko/ko_presets.dart';
 import 'package:loftify/Utils/loftify_file_util.dart';
 import 'package:loftify/Utils/lottie_files.dart';
 import 'package:loftify/Utils/request_header_util.dart';
@@ -92,6 +93,7 @@ Future<void> initApp() async {
   // Hive.defaultDirectory = await FileUtil.getApplicationDir();
   await HiveUtil.initBox();
   await GStorage.init(await FileUtil.getApplicationDir()); // 한국어 번역 설정
+  KoPresets.seedOnce(); // 기본 제공 작품 설정 (림버스 컴퍼니 용어집·인물 말투)
   await ResponsiveUtil.init();
   LoftifyFileUtil.configureDownloadDelegates();
   await DownloadTaskManager.instance.initialize();

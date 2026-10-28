@@ -51,7 +51,9 @@ class KoVoiceBook {
       }
       final gt = l.indexOf('>');
       final colon = l.indexOf(RegExp(r'[:：]'));
-      if (gt > 0 && colon > gt) {
+      final eq0 = l.indexOf('=');
+      // '이름=...' 으로 시작하는 줄은 인물 카드 (설명 안에 '>' 가 있어도)
+      if (gt > 0 && colon > gt && (eq0 < 0 || eq0 > gt)) {
         final from = l.substring(0, gt).trim();
         final to = l.substring(gt + 1, colon).trim();
         final rule = l.substring(colon + 1).trim();

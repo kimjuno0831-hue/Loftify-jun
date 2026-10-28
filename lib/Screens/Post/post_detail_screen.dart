@@ -2401,9 +2401,10 @@ class _PostDetailScreenState extends BaseDynamicState<PostDetailScreen>
       title: post.title,
       content: post.content,
       tags: post.tagList,
-      builder: (title, content) => PostContentSection(
+      builder: (title, content, blockBuilder) => PostContentSection(
         title: title,
         content: content,
+        blockBuilder: blockBuilder,
         url: post.permalink,
         style: context.design.typography.readingBody,
         onDownloadSuccess: _handleDownloadSuccessAction,

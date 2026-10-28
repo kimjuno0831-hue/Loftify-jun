@@ -23,13 +23,23 @@ class KoDoc {
   ];
 
   // 줄 번역(map)을 넣어 HTML 을 다시 만든다. 번역이 없는 줄은 원문 그대로.
-  String build(String Function(String line) tr) {
+  // 번역할 문단들 (순서대로). build(mark: true) 의 data-ko 번호가 이 목록의 위치
+  List<KoLines> get blocks => [for (final p in parts) if (p is KoLines) p];
+
+  // mark: 문단마다 data-ko="번호" 를 붙여서 화면에서 눌렀을 때 어느 문단인지 알 수 있게
+  String build(String Function(String line) tr, {bool mark = false, String extra = ''}) {
     final sb = StringBuffer();
+    var idx = 0;
     for (final p in parts) {
       if (p is String) {
         sb.write(p);
       } else if (p is KoLines) {
-        sb.write(p.open);
+        sb.write(
+          mark
+              ? p.open.replaceFirstMapped(RegExp(r'^<(\w+)'), (m) => '<${m[1]} data-ko="$idx"$extra')
+              : p.open,
+        );
+        idx++;
         for (var i = 0; i < p.lines.length; i++) {
           if (i > 0) sb.write('<br>');
           sb.write(const HtmlEscape(HtmlEscapeMode.element).convert(tr(p.lines[i])));
@@ -62,6 +72,8 @@ abstract final class KoChapter {
 
   static bool get loadSaved => _get(kLoadSaved, true);
   static bool get translateTitle => _get(kTitle, true);
+  static const kTapToFix = 'koChTapFix'; // 번역된 문단을 누르면 바로 고치기
+  static bool get tapToFix => _get(kTapToFix, true);
 
   static bool _get(String k, bool def) {
     try {

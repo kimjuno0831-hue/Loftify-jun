@@ -58,7 +58,11 @@ class CustomHtmlWidget extends StatefulWidget {
     this.maxHeaderLevel = 5,
     this.detectLanguage,
     this.selectable = true,
+    this.blockBuilder,
   });
+
+  // 한국어 번역(Loftify-jun): 특정 문단을 직접 그리고 싶을 때 (null 을 돌려주면 기본 그리기)
+  final Widget? Function(dom.Element element, TextStyle? style)? blockBuilder;
 
   final int maxHeaderLevel;
   final String content;
@@ -240,6 +244,8 @@ class CustomHtmlWidgetState extends State<CustomHtmlWidget> {
       textStyle: style,
       factoryBuilder: () => CustomImageFactory(),
       customWidgetBuilder: (element) {
+        final custom = widget.blockBuilder?.call(element, style);
+        if (custom != null) return custom;
         bool isElementEmpty = element.children.isEmpty && element.text.isEmpty;
         if (element.localName == 'a') {
           if (widget.inlineLinks) return null;

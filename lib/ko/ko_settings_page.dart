@@ -209,6 +209,13 @@ class _KoSettingsPageState extends State<KoSettingsPage> {
             icon: Icons.history,
           ),
           _switch(KoChapter.kTitle, true, '글 제목도 번역', icon: Icons.title),
+          _switch(
+            KoChapter.kTapToFix,
+            true,
+            '문단을 누르면 바로 고치기',
+            subtitle: '번역된 본문에서 문단을 누르면 그 문단의 번역 고치기 창이 열려요',
+            icon: Icons.touch_app_outlined,
+          ),
           ListTile(
             leading: const Icon(Icons.save_outlined),
             title: const Text('저장된 본문 번역'),

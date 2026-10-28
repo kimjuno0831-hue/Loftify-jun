@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:awesome_chewie/awesome_chewie.dart';
 import 'package:flutter/material.dart';
+import 'package:html/dom.dart' as dom;
 
 import '../../Theme/loftify_design_theme.dart';
 import '../Design/loftify_reading.dart';
@@ -16,6 +17,7 @@ class PostContentSection extends StatefulWidget {
     this.style,
     this.onDownloadSuccess,
     this.textExtractor,
+    this.blockBuilder,
   });
 
   final String title;
@@ -24,6 +26,8 @@ class PostContentSection extends StatefulWidget {
   final TextStyle? style;
   final VoidCallback? onDownloadSuccess;
   final String Function(String content)? textExtractor;
+  // 한국어 번역: 번역된 문단을 눌러서 고칠 수 있게 직접 그림
+  final Widget? Function(dom.Element element, TextStyle? style)? blockBuilder;
 
   @override
   State<PostContentSection> createState() => _PostContentSectionState();
@@ -78,6 +82,7 @@ class _PostContentSectionState extends State<PostContentSection> {
             heightDelta: 0,
             letterSpacingDelta: 0,
             onDownloadSuccess: widget.onDownloadSuccess,
+            blockBuilder: widget.blockBuilder,
           ),
         );
       }

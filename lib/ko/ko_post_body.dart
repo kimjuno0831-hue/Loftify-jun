@@ -1,6 +1,7 @@
 // 글 상세 화면의 본문 번역 줄 + 번역된 본문
 // 원래 본문 위젯(builder)은 그대로 두고, 넘겨주는 제목·본문 HTML 만 번역본으로 바꿔 준다.
 import 'package:flutter/material.dart';
+import 'package:html/dom.dart' as dom;
 import 'package:loftify/ko/ko_chapter.dart';
 import 'package:loftify/ko/ko_compat.dart';
 import 'package:loftify/ko/ko_fix.dart';
@@ -21,7 +22,12 @@ class KoPostBody extends StatefulWidget {
   final String title;
   final String content;
   final List<String> tags;
-  final Widget Function(String title, String content) builder;
+  // blockBuilder: 번역된 문단을 직접 그려서 누르면 고칠 수 있게 (본문 위젯에 넘겨줌)
+  final Widget Function(
+    String title,
+    String content,
+    Widget? Function(dom.Element element, TextStyle? style)? blockBuilder,
+  ) builder;
 
   @override
   State<KoPostBody> createState() => _KoPostBodyState();
@@ -203,6 +209,63 @@ class _KoPostBodyState extends State<KoPostBody> {
     });
   }
 
+  // 번역된 문단: 기본 그리기 대신 글자를 직접 그리고, 누르면 그 문단 번역 고치기
+  Widget? _blockBuilder(dom.Element element, TextStyle? style) {
+    final k = element.attributes['data-ko'];
+    if (k == null) return null;
+    final i = int.tryParse(k);
+    final blocks = _doc.blocks;
+    if (i == null || i < 0 || i >= blocks.length) return null;
+    final b = blocks[i];
+    final text = Text(b.lines.map(_tr).join('\n'), style: style);
+    final gap = (style?.fontSize ?? 16) * 0.5;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: gap),
+      child: KoChapter.tapToFix
+          ? GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _fixBlock(b),
+              child: text,
+            )
+          : text,
+    );
+  }
+
+  Future<void> _fixBlock(KoLines b) async {
+    final lines = b.lines.where(KoTr.hasCjk).toList();
+    if (lines.isEmpty) return;
+    var zh = lines.first;
+    if (lines.length > 1) {
+      // 줄바꿈으로 나뉜 문단: 고칠 줄 고르기
+      final picked = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final l in lines)
+                ListTile(
+                  title: Text(_tr(l), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(l, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () => Navigator.pop(context, l),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (picked == null) return;
+      zh = picked;
+    }
+    final ko = _tr(zh);
+    await KoFix.open(
+      zh,
+      ko: ko == zh ? null : ko,
+      retranslate: () => _retranslateLine(zh),
+    );
+    if (mounted) setState(() {});
+  }
+
   void _menu(String v) {
     switch (v) {
       case 'ai':
@@ -228,9 +291,10 @@ class _KoPostBodyState extends State<KoPostBody> {
     final body = _showKo
         ? widget.builder(
             KoChapter.translateTitle ? _tr(widget.title.trim()) : widget.title,
-            _doc.build(_tr),
+            _doc.build(_tr, mark: true),
+            _blockBuilder,
           )
-        : widget.builder(widget.title, widget.content);
+        : widget.builder(widget.title, widget.content, null);
     if (!KoTr.enabled || !_hasText) return body;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -222,6 +222,13 @@ class _KoSettingsPageState extends State<KoSettingsPage> {
             subtitle: Text('${_listNames[_listMode]} · 글 목록, 검색 결과, 태그 등 짧은 글자'),
             onTap: _pickListMode,
           ),
+          _switch(
+            KoTr.kDigest,
+            false,
+            '글 카드 요약도 번역',
+            subtitle: '목록에서 제목 아래 보이는 본문 앞부분. 양이 많아 구글 번역이 잠깐 막히기 쉬워요',
+            icon: Icons.short_text,
+          ),
           _switch(KoTr.kSearchKo, true, '한국어로 검색', subtitle: '검색어에 한국어가 있으면 중국어로 바꿔서 검색해요', icon: Icons.search),
           _header('용어집'),
           ListTile(

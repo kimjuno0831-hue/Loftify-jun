@@ -105,6 +105,15 @@ abstract final class KoTr {
   static bool get replyOn => enabled && _get(kReply, true);
   static bool get searchOn => enabled && _get(kSearch, true);
   static bool get searchKoOn => enabled && _get(kSearchKo, true);
+  // 글 카드 요약(본문 앞부분)도 번역할지. 양이 많아 구글이 막히기 쉬워서 기본은 끔
+  static const kDigest = 'koTrDigest';
+  static bool get digestOn => textOn && _get(kDigest, false);
+
+  // 카드 요약: 줄바꿈을 펴고 앞부분만 (카드에는 몇 줄만 보이니 그만큼만 번역해서 요청을 줄임)
+  static String digest(String s) {
+    final t = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t.length > 140 ? '${t.substring(0, 140)}…' : t;
+  }
   static const kSearchShuffle = 'koTrSearchShuffle';
   // 검색 결과를 당겨서 새로고침하면 섞어서 보여주기 (번역 켜기와 상관없음)
   static bool get searchShuffleOn => _get(kSearchShuffle, true);
@@ -269,7 +278,9 @@ abstract final class KoTr {
     if (keys.isEmpty) return;
     final redo = <String>{
       for (final c in _caches) ...c.keys.where((s) => keys.any((k) => s.contains(k))),
+      ..._diskMatching(keys),
     }.toList();
+    _diskForget(redo);
     if (redo.isEmpty) return;
     for (final c in _caches) {
       for (final s in redo) {
@@ -365,6 +376,7 @@ abstract final class KoTr {
       } else {
         continue;
       }
+      if (by != '밈 사전') _diskPut(i, src, ko);
       if (c.length > _cacheMax) c.remove(c.keys.first);
     }
     _rev.remove(ko);
@@ -393,6 +405,9 @@ abstract final class KoTr {
     for (final c in _caches) {
       c.clear();
     }
+    try {
+      GStorage.texts.clear();
+    } catch (_) {}
     _viaGoogle.clear();
     updates.value++;
     subRefresh.value++;
@@ -453,6 +468,7 @@ abstract final class KoTr {
     for (final c in _caches) {
       c.remove(s);
     }
+    _diskForget([s]);
     _gaveUp.remove(s);
     _recentAsk.remove(s);
     _viaGoogle.remove(s);
@@ -489,10 +505,50 @@ abstract final class KoTr {
   }
 
   static bool isTranslated(String s) =>
-      overrides.containsKey(s) || _cache.containsKey(s);
+      overrides.containsKey(s) || _cache.containsKey(s) || _disk(s) != null;
 
   // 화면에 보여줄 글자: 고친 번역 > 번역 > 원문
-  static String show(String s) => overrides[s] ?? _cache[s] ?? s;
+  static String show(String s) => overrides[s] ?? _cache[s] ?? _disk(s) ?? s;
+
+  // ── 저장된 번역 (앱을 다시 켜도 같은 제목·태그를 또 요청하지 않게) ──
+  static String? _disk(String s) {
+    try {
+      final v = GStorage.texts.get('$style|$s');
+      if (v is String) {
+        _cache[s] = v; // 다음부터는 메모리에서
+        return v;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static List<String> _diskMatching(List<String> keys) {
+    final out = <String>[];
+    try {
+      for (final k in GStorage.texts.keys) {
+        final src = k.toString().substring(2);
+        if (keys.any(src.contains)) out.add(src);
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  static void _diskForget(List<String> srcs) {
+    try {
+      final box = GStorage.texts;
+      box.deleteAll([for (final s in srcs) for (var i = 0; i < 3; i++) '$i|$s']);
+    } catch (_) {}
+  }
+
+  static void _diskPut(int st, String src, String ko) {
+    try {
+      final box = GStorage.texts;
+      box.put('$st|$src', ko);
+      if (box.length > 40000) {
+        box.deleteAll(box.keys.take(10000).toList());
+      }
+    } catch (_) {}
+  }
 
   // 번역문으로 원문 찾기 (탄막 메뉴·자막에서 '번역 고치기' 할 때)
   static String? origOf(String ko) => _rev[ko];
@@ -1067,13 +1123,13 @@ abstract final class KoTr {
   static DateTime _gLast = DateTime(2000);
 
   static Future<void> _gAcquire() async {
-    while (_gActive >= 2) {
+    while (_gActive >= 1) {
       final c = Completer<void>();
       _gWait.add(c);
       await c.future;
     }
     _gActive++;
-    final wait = 350 - DateTime.now().difference(_gLast).inMilliseconds;
+    final wait = 600 - DateTime.now().difference(_gLast).inMilliseconds;
     _gLast = DateTime.now().add(Duration(milliseconds: wait > 0 ? wait : 0));
     if (wait > 0) await Future.delayed(Duration(milliseconds: wait));
   }

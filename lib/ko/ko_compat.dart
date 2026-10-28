@@ -10,14 +10,17 @@ import 'package:url_launcher/url_launcher.dart';
 abstract final class GStorage {
   static const settingBox = 'ko_settings';
   static const chapterBox = 'ko_chapters';
+  static const textBox = 'ko_texts'; // 제목·태그 등 짧은 글 번역
 
   static Box get setting => Hive.box(settingBox);
   static Box get chapters => Hive.box(chapterBox);
+  static Box get texts => Hive.box(textBox);
 
   // main.dart 에서 HiveUtil.initBox() 다음에 부름
   static Future<void> init(String path) async {
     await Hive.openBox(settingBox, path: path);
     await Hive.openBox(chapterBox, path: path);
+    await Hive.openBox(textBox, path: path);
   }
 }
 

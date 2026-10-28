@@ -25,6 +25,7 @@ import '../loftify_icons.dart';
 import '../loftify_reaction_icon.dart';
 import 'image_grid.dart';
 import '../../ko/ko_widgets.dart';
+import '../../ko/ko_translate.dart';
 
 export 'package:loftify/Widgets/PostItem/general_post_item.dart';
 
@@ -232,7 +233,8 @@ class WaterfallFlowPostItemWidgetState
                   SizedBox(height: design.spacing.lg),
                 if (StringUtil.isNotEmpty(item.digest))
                   KoText(
-                    HtmlUtil.extractTextFromHtml(item.digest),
+                    KoTr.digest(HtmlUtil.extractTextFromHtml(item.digest)),
+                    enabled: KoTr.digestOn,
                     maxLines: 6,
                     overflow: TextOverflow.ellipsis,
                     style: design.typography.metadata.copyWith(
@@ -742,8 +744,9 @@ class GridPostItemWidgetState extends State<GridPostItemWidget> {
             SizedBox(height: item.title.isNotEmpty ? 5 : 5),
             Expanded(
               child: KoText(
-                StringUtil.clearBlank(
-                    HtmlUtil.extractTextFromHtml(item.digest)),
+                KoTr.digest(StringUtil.clearBlank(
+                    HtmlUtil.extractTextFromHtml(item.digest))),
+                enabled: KoTr.digestOn,
                 maxLines: item.title.isNotEmpty ? 6 : 8,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.apply(
